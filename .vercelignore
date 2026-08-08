@@ -1,0 +1,15 @@
+node_modules
+client
+admin
+server/quizsphere.db
+server/test.db
+*.db
+*.db-wal
+*.db-shm
+*.log
+.git
+dist
+build.bat
+dev.bat
+start.bat
+README.md

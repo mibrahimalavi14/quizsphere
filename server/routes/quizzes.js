@@ -1,0 +1,176 @@
+import { Router } from 'express';
+import { db } from '../db.js';
+import { requireAuth } from '../middleware/auth.js';
+import { gradeAndRecord } from '../grader.js';
+
+const router = Router();
+
+function mulberry32(a) {
+  return function () {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function hashString(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+  return h;
+}
+
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function pickSeeded(ids, count, seed) {
+  const arr = [...ids];
+  const rng = mulberry32(hashString(seed));
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr.slice(0, count);
+}
+
+function stripAnswer(q, includeCorrect) {
+  const base = {
+    id: q.id,
+    question: q.question,
+    options: [q.option_a, q.option_b, q.option_c, q.option_d],
+    points: q.points,
+    timeLimit: q.time_limit,
+    difficulty: q.difficulty,
+    explanation: q.explanation || '',
+  };
+  if (includeCorrect) base.correct = q.correct;
+  return base;
+}
+
+router.get('/daily', requireAuth, (req, res) => {
+  const dailySubject = db.prepare(`SELECT * FROM subjects WHERE name = 'Daily Challenge'`).get();
+  if (!dailySubject) return res.status(500).json({ error: 'Daily challenge not configured' });
+
+  const doneToday = db.prepare(`
+    SELECT a.* FROM attempts a WHERE a.user_id = ? AND a.mode = 'daily' AND date(a.created_at) = date('now')
+  `).get(req.user.id);
+
+  if (doneToday) {
+    return res.json({ done: true, subject: { id: dailySubject.id, name: dailySubject.name, icon: dailySubject.icon, color: dailySubject.color }, attempt: doneToday });
+  }
+
+  const allIds = db.prepare(`SELECT id FROM questions WHERE subject_id IN (SELECT id FROM subjects WHERE is_visible = 1)`).all().map((r) => r.id);
+  if (allIds.length === 0) return res.json({ done: false, subject: { id: dailySubject.id, name: dailySubject.name, icon: dailySubject.icon, color: dailySubject.color }, questions: [] });
+
+  const picked = pickSeeded(allIds, 5, todayKey());
+  const placeholders = picked.map(() => '?').join(',');
+  const rows = db.prepare(`SELECT * FROM questions WHERE id IN (${placeholders})`).all(...picked);
+  const orderMap = new Map(picked.map((id, i) => [id, i]));
+  const questions = rows
+    .map((q) => stripAnswer(q, false))
+    .sort((a, b) => orderMap.get(a.id) - orderMap.get(b.id));
+
+  res.json({
+    done: false,
+    date: todayKey(),
+    subject: { id: dailySubject.id, name: dailySubject.name, icon: dailySubject.icon, color: dailySubject.color },
+    questions,
+  });
+});
+
+router.post('/daily/submit', requireAuth, (req, res) => {
+  const dailySubject = db.prepare(`SELECT id FROM subjects WHERE name = 'Daily Challenge'`).get();
+  if (!dailySubject) return res.status(500).json({ error: 'Daily challenge not configured' });
+
+  const doneToday = db.prepare(`
+    SELECT id FROM attempts WHERE user_id = ? AND mode = 'daily' AND date(created_at) = date('now')
+  `).get(req.user.id);
+  if (doneToday) return res.status(409).json({ error: 'You already completed today\'s challenge. Come back tomorrow!' });
+
+  const answers = Array.isArray(req.body?.answers) ? req.body.answers : [];
+  try {
+    const result = gradeAndRecord({ userId: req.user.id, subjectId: dailySubject.id, answers, mode: 'daily' });
+    res.status(201).json(result);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+router.get('/rapid', requireAuth, (req, res) => {
+  const rapidSubject = db.prepare(`SELECT * FROM subjects WHERE name = 'Rapid Fire'`).get();
+  if (!rapidSubject) return res.status(500).json({ error: 'Rapid fire not configured' });
+
+  const limit = Math.min(Number(req.query.limit) || 10, 10);
+  const rows = db.prepare(`
+    SELECT * FROM questions WHERE subject_id IN (SELECT id FROM subjects WHERE is_visible = 1)
+    ORDER BY RANDOM() LIMIT ?
+  `).all(limit);
+
+  res.json({
+    subject: { id: rapidSubject.id, name: rapidSubject.name, icon: rapidSubject.icon, color: rapidSubject.color },
+    questions: rows.map((q) => ({ ...stripAnswer(q, false), timeLimit: 10 })),
+  });
+});
+
+router.post('/rapid/submit', requireAuth, (req, res) => {
+  const rapidSubject = db.prepare(`SELECT id FROM subjects WHERE name = 'Rapid Fire'`).get();
+  if (!rapidSubject) return res.status(500).json({ error: 'Rapid fire not configured' });
+
+  const answers = Array.isArray(req.body?.answers) ? req.body.answers : [];
+  try {
+    const result = gradeAndRecord({ userId: req.user.id, subjectId: rapidSubject.id, answers, mode: 'rapid' });
+    res.status(201).json(result);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+router.get('/:subjectId/questions', requireAuth, (req, res) => {
+  const subjectId = Number(req.params.subjectId);
+  const limit = Math.min(Number(req.query.limit) || 10, 50);
+  const difficulty = req.query.difficulty || 'all';
+  const mode = req.query.mode || 'quiz';
+  const practice = mode === 'practice';
+
+  const subject = db.prepare('SELECT id, name, icon, color FROM subjects WHERE id = ? AND is_visible = 1').get(subjectId);
+  if (!subject) return res.status(404).json({ error: 'Subject not found' });
+
+  const where = ['subject_id = ?'];
+  const params = [subjectId];
+  if (difficulty !== 'all') {
+    where.push('difficulty = ?');
+    params.push(difficulty);
+  }
+  const rows = db.prepare(`SELECT * FROM questions WHERE ${where.join(' AND ')} ORDER BY RANDOM() LIMIT ?`).all(...params, limit);
+  if (rows.length === 0) {
+    return res.json({ subject, difficulty, mode, questions: [] });
+  }
+
+  res.json({
+    subject,
+    difficulty,
+    mode,
+    questions: rows.map((q) => stripAnswer(q, practice)),
+  });
+});
+
+router.post('/:subjectId/submit', requireAuth, (req, res) => {
+  const subjectId = Number(req.params.subjectId);
+  const answers = Array.isArray(req.body?.answers) ? req.body.answers : [];
+  const mode = req.body?.mode || 'quiz';
+  const negative = Boolean(req.body?.negative);
+
+  const allowedModes = ['quiz', 'practice'];
+  if (!allowedModes.includes(mode)) return res.status(400).json({ error: 'Invalid mode' });
+
+  try {
+    const result = gradeAndRecord({ userId: req.user.id, subjectId, answers, mode, negative });
+    res.status(201).json(result);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+export default router;
