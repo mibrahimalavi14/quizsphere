@@ -8,7 +8,7 @@ import Loading from '../components/Loading';
 export default function QuizIntro() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [subject, setSubject] = useState(null);
   const [count, setCount] = useState(10);
   const [difficulty, setDifficulty] = useState('all');
@@ -17,6 +17,7 @@ export default function QuizIntro() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (user) refreshUser().catch(() => {});
     api.get(`/subjects/${id}`).then(setSubject).catch(() => setError('Subject not found'));
   }, [id]);
 

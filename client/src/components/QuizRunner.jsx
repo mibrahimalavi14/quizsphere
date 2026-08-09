@@ -2,12 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 
 const OPTION_KEYS = ['A', 'B', 'C', 'D'];
 
 export default function QuizRunner({ subject, questions, mode = 'quiz', negative = false, submitUrl }) {
   const navigate = useNavigate();
   const { push } = useToast();
+  const { refreshUser } = useAuth();
 
   const practice = mode === 'practice';
   const noBack = mode === 'daily' || mode === 'rapid';
@@ -38,6 +40,7 @@ export default function QuizRunner({ subject, questions, mode = 'quiz', negative
         selected: answersRef.current[q.id] === undefined ? null : answersRef.current[q.id],
       }));
       const result = await api.post(submitUrl, { answers: payload, mode, negative });
+      refreshUser().catch(() => {});
       navigate(`/result/${result.attemptId}`, { state: { result } });
     } catch (e) {
       push(e.message, 'error');

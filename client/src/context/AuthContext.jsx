@@ -32,8 +32,15 @@ export function AuthProvider({ children }) {
     setUserState(null);
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    const data = await api.get('/user/stats');
+    setUser(data.user);
+    setUserState(data.user);
+    return data.user;
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, token, isAuthenticated: !!token, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, isAuthenticated: !!token, login, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

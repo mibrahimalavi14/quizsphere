@@ -9,14 +9,15 @@ function xpForLevel(level) {
 }
 
 export default function Ranks() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, refreshUser } = useAuth();
   const [data, setData] = useState(null);
   const [subjects, setSubjects] = useState([]);
 
   useEffect(() => {
+    if (isAuthenticated) refreshUser().catch(() => {});
     api.get('/ranks').then(setData).catch(() => setData(null));
     api.get('/subjects').then(setSubjects).catch(() => setSubjects([]));
-  }, []);
+  }, [isAuthenticated]);
 
   if (!data) return <Loading text="Loading ranks…" />;
 

@@ -26,7 +26,7 @@ export default function Home() {
   }, [isAuthenticated]);
 
   const display = me || user;
-  const myRank = isAuthenticated ? (user?.rankKey || 'bronze') : null;
+  const myRank = isAuthenticated ? ((me || user)?.rankKey || 'bronze') : null;
   const modeLocked = (key) => myRank !== null && !canAccessRank(myRank, key);
 
   return (

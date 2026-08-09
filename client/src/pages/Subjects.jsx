@@ -8,17 +8,21 @@ import Loading from '../components/Loading';
 export default function Subjects() {
   const { user, isAuthenticated } = useAuth();
   const [subjects, setSubjects] = useState(null);
+  const [me, setMe] = useState(null);
   const [search, setSearch] = useState('');
 
   useEffect(() => {
     api.get('/subjects').then(setSubjects).catch(() => setSubjects([]));
-  }, []);
+    if (isAuthenticated) {
+      api.get('/user/stats').then((d) => setMe(d.user)).catch(() => {});
+    }
+  }, [isAuthenticated]);
 
   const filtered = (subjects || []).filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  const myRank = isAuthenticated ? (user?.rankKey || 'bronze') : null;
+  const myRank = isAuthenticated ? ((me || user)?.rankKey || 'bronze') : null;
 
   const locked = (s) => myRank !== null && !canAccessRank(myRank, s.min_rank);
 
