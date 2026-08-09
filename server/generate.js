@@ -5,8 +5,6 @@ const SLEEP_MS = 6000;
 const AMOUNT_PER_REQUEST = 50;
 
 const CATEGORY_MAP = {
-  'General Knowledge': 9,
-  'Science': 17,
   'Mathematics': 19,
   'Computer Science': 18,
   'History': 23,
@@ -98,8 +96,10 @@ async function generateSubject(subject) {
       }
       await new Promise((r) => setTimeout(r, SLEEP_MS));
     }
-  } else {
+  } else if (subject.name === 'English') {
     added = generateEnglish(subject.id, existing, need);
+  } else {
+    console.log(`    covered by built-in question bank — skip top-up`);
   }
   console.log(`  ${subject.name}: finished, +${added} questions`);
   return added;
