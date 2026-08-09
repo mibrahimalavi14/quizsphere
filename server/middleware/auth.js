@@ -13,7 +13,7 @@ export function requireAuth(req, res, next) {
   if (!token) return res.status(401).json({ error: 'Not authenticated' });
   try {
     const payload = jwt.verify(token, JWT_SECRET);
-    const user = db.prepare('SELECT id, name, email, is_admin FROM users WHERE id = ?').get(payload.id);
+    const user = db.prepare('SELECT id, name, email, is_admin, xp FROM users WHERE id = ?').get(payload.id);
     if (!user) return res.status(401).json({ error: 'User not found' });
     req.user = user;
     next();

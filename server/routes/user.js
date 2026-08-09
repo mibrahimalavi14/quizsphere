@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { db } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { levelInfo } from '../levels.js';
+import { rankInfoForXp } from '../ranks.js';
 import { BADGES, getUserBadges } from '../badges.js';
 
 const router = Router();
@@ -26,6 +27,7 @@ router.patch('/profile', requireAuth, (req, res) => {
     bio: user.bio,
     xp: user.xp,
     ...levelInfo(user.xp),
+    ...rankInfoForXp(user.xp),
   });
 });
 
@@ -64,6 +66,7 @@ router.get('/stats', requireAuth, (req, res) => {
       bio: user.bio,
       xp: user.xp,
       ...levelInfo(user.xp),
+      ...rankInfoForXp(user.xp),
       currentStreak: user.current_streak,
       maxStreak: user.max_streak,
     },

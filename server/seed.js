@@ -3,12 +3,12 @@ import { db } from './db.js';
 import { ensureSpecialSubjects } from './special.js';
 
 const subjects = [
-  { name: 'General Knowledge', description: 'World, countries, sports and everyday facts.', icon: '🌍', color: '#f59e0b' },
-  { name: 'Science', description: 'Physics, chemistry, biology and space.', icon: '🔬', color: '#10b981' },
-  { name: 'Mathematics', description: 'Arithmetic, algebra, geometry and logic.', icon: '➗', color: '#6366f1' },
-  { name: 'Computer Science', description: 'Programming, hardware, networks and tech.', icon: '💻', color: '#3b82f6' },
-  { name: 'History', description: 'Ancient and modern world history.', icon: '🏛️', color: '#8b5cf6' },
-  { name: 'English', description: 'Grammar, vocabulary and comprehension.', icon: '📖', color: '#ec4899' },
+  { name: 'General Knowledge', description: 'World, countries, sports and everyday facts.', icon: '🌍', color: '#f59e0b', rank: 'bronze' },
+  { name: 'Science', description: 'Physics, chemistry, biology and space.', icon: '🔬', color: '#10b981', rank: 'bronze' },
+  { name: 'Mathematics', description: 'Arithmetic, algebra, geometry and logic.', icon: '➗', color: '#6366f1', rank: 'silver' },
+  { name: 'Computer Science', description: 'Programming, hardware, networks and tech.', icon: '💻', color: '#3b82f6', rank: 'gold' },
+  { name: 'History', description: 'Ancient and modern world history.', icon: '🏛️', color: '#8b5cf6', rank: 'platinum' },
+  { name: 'English', description: 'Grammar, vocabulary and comprehension.', icon: '📖', color: '#ec4899', rank: 'diamond' },
 ];
 
 const questionsBySubject = {
@@ -97,8 +97,8 @@ function seedAdmin() {
 
 function seedSubjects() {
   for (const s of subjects) {
-    db.prepare('INSERT OR IGNORE INTO subjects (name, description, icon, color) VALUES (?, ?, ?, ?)')
-      .run(s.name, s.description, s.icon, s.color);
+    db.prepare('INSERT OR IGNORE INTO subjects (name, description, icon, color, is_visible, min_rank) VALUES (?, ?, ?, ?, 1, ?)')
+      .run(s.name, s.description, s.icon, s.color, s.rank);
   }
   ensureSpecialSubjects();
 }

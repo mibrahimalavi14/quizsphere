@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { api } from '../api';
+import { useAuth } from '../context/AuthContext';
+import { canAccessRank } from '../ranks';
 import Loading from '../components/Loading';
 
 export default function QuizIntro() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [subject, setSubject] = useState(null);
   const [count, setCount] = useState(10);
   const [difficulty, setDifficulty] = useState('all');
@@ -28,6 +31,33 @@ export default function QuizIntro() {
   }
 
   if (!subject) return <Loading />;
+
+  const isLocked = !canAccessRank(user?.rankKey || 'bronze', subject.min_rank);
+
+  if (isLocked) {
+    return (
+      <div className="container">
+        <div className="quiz-intro">
+          <div className="card" style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 56, marginBottom: 8 }}>🔒</div>
+            <h2>Subject locked</h2>
+            <p className="desc" style={{ marginTop: 8 }}>
+              <b style={{ color: subject.requiredRank?.color }}>{subject.requiredRank?.icon} {subject.requiredRank?.name} rank</b>{' '}
+              is required to play <b>{subject.name}</b>.
+            </p>
+            <p style={{ color: 'var(--text-dim)', fontSize: 14, marginTop: 6 }}>
+              You are currently <b style={{ color: user?.rankColor }}>{user?.rankIcon} {user?.rankName}</b> (Level {user?.level}).
+              Keep playing quizzes to earn XP and reach Level {subject.requiredRank?.minLevel}.
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginTop: 18 }}>
+              <Link to="/ranks" className="btn btn-primary">See Ranks & Rewards</Link>
+              <Link to="/subjects" className="btn btn-outline">Browse Subjects</Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const maxCount = Math.min(subject.question_count, 20);
   const safeCount = Math.min(Math.max(count, 5), Math.max(maxCount, 5));

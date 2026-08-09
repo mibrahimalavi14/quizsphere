@@ -83,6 +83,9 @@ export default function Leaderboard() {
                   {avatar(row)}
                   <div style={{ minWidth: 0 }}>
                     <div className="lb-name">
+                      {row.playerRankIcon && (
+                        <span className="rank-badge lb-rank-icon" style={{ color: row.playerRankColor, borderColor: row.playerRankColor }}>{row.playerRankIcon}</span>
+                      )}
                       {row.name} {user && row.user_id === user.id && <span className="badge badge-primary">You</span>}
                     </div>
                     <div className="lb-sub">

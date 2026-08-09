@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { db } from '../db.js';
 import { signToken, requireAuth } from '../middleware/auth.js';
 import { levelInfo } from '../levels.js';
+import { rankInfoForXp } from '../ranks.js';
 
 const router = Router();
 
@@ -17,6 +18,7 @@ function publicUser(u) {
     bio: u.bio || '',
     xp: u.xp || 0,
     ...levelInfo(u.xp || 0),
+    ...rankInfoForXp(u.xp || 0),
   };
 }
 

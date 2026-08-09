@@ -92,6 +92,7 @@ db.exec(`
     icon TEXT NOT NULL DEFAULT '📘',
     color TEXT NOT NULL DEFAULT '#6366f1',
     is_visible INTEGER NOT NULL DEFAULT 1,
+    min_rank TEXT NOT NULL DEFAULT 'bronze',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -182,6 +183,20 @@ const migrate = () => {
   if (!columnExists('users', 'last_played_date')) db.exec(`ALTER TABLE users ADD COLUMN last_played_date TEXT`);
 
   if (!columnExists('subjects', 'is_visible')) db.exec(`ALTER TABLE subjects ADD COLUMN is_visible INTEGER NOT NULL DEFAULT 1`);
+
+  const addedMinRank = !columnExists('subjects', 'min_rank');
+  if (addedMinRank) {
+    db.exec(`ALTER TABLE subjects ADD COLUMN min_rank TEXT NOT NULL DEFAULT 'bronze'`);
+    db.exec(`
+      UPDATE subjects SET min_rank = CASE name
+        WHEN 'Mathematics' THEN 'silver'
+        WHEN 'Computer Science' THEN 'gold'
+        WHEN 'History' THEN 'platinum'
+        WHEN 'English' THEN 'diamond'
+        ELSE 'bronze'
+      END
+    `);
+  }
 
   if (!columnExists('questions', 'difficulty')) db.exec(`ALTER TABLE questions ADD COLUMN difficulty TEXT NOT NULL DEFAULT 'medium'`);
   if (!columnExists('questions', 'explanation')) db.exec(`ALTER TABLE questions ADD COLUMN explanation TEXT NOT NULL DEFAULT ''`);

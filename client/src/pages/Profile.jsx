@@ -77,11 +77,34 @@ export default function Profile() {
                 <button className="btn btn-outline btn-sm" onClick={openEdit}>Edit</button>
               </div>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
+                <span className="rank-badge" style={{ color: user.rankColor, borderColor: user.rankColor }}>{user.rankIcon} {user.rankName}</span>
                 <span className="level-badge">Level {user.level}</span>
                 <span className="badge badge-warning">🔥 {user.currentStreak} day streak</span>
                 <span className="badge badge-dim">Best streak: {user.maxStreak}</span>
               </div>
             </div>
+
+            {user.nextRank && (
+              <div className="rank-progress" style={{ marginBottom: 20 }}>
+                <div className="rank-progress-head">
+                  <span>Next rank: {user.nextRank.icon} {user.nextRank.name}</span>
+                  <span>Reach Level {user.nextRank.minLevel}</span>
+                </div>
+                <div className="rank-progress-bar">
+                  <div
+                    className="rank-progress-fill"
+                    style={{
+                      width: `${Math.min(100, ((user.level - user.rankMinLevel) / (user.nextRank.minLevel - user.rankMinLevel)) * 100)}%`,
+                      background: user.nextRank.color,
+                    }}
+                  ></div>
+                </div>
+                <div className="rank-progress-meta">
+                  <span>{user.nextRank.minLevel - user.level} levels to go</span>
+                  <span>⚡ {user.totalXp} total XP</span>
+                </div>
+              </div>
+            )}
 
             <div className="xp-bar-wrap" style={{ marginBottom: 20 }}>
               <div className="xp-bar-head">

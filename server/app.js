@@ -12,6 +12,7 @@ import leaderboardRoutes from './routes/leaderboard.js';
 import userRoutes from './routes/user.js';
 import announcementRoutes from './routes/announcements.js';
 import adminRoutes from './routes/admin.js';
+import rankRoutes from './routes/ranks.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -39,6 +40,7 @@ export function createApp() {
   app.use('/api/user', userRoutes);
   app.use('/api/announcements', announcementRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/ranks', rankRoutes);
 
   const adminDist = findStaticDir([
     path.join(__dirname, 'deploy', 'admin'),

@@ -34,12 +34,14 @@ export default function Navbar() {
           <NavLink to="/quiz/daily" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={() => setOpen(false)}>Daily 📅</NavLink>
           <NavLink to="/quiz/rapid" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={() => setOpen(false)}>Rapid ⚡</NavLink>
           <NavLink to="/subjects" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={() => setOpen(false)}>Subjects</NavLink>
+          <NavLink to="/ranks" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={() => setOpen(false)}>Ranks 🏅</NavLink>
           <NavLink to="/leaderboard" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={() => setOpen(false)}>Leaderboard</NavLink>
 
           {isAuthenticated ? (
             <>
               <NavLink to="/profile" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={() => setOpen(false)}>Profile</NavLink>
               <div className="nav-user">
+                {user?.rankIcon && <span className="rank-badge" style={{ color: user.rankColor }}>{user.rankIcon}</span>}
                 {user?.level > 0 && <span className="level-badge">Lv {user.level}</span>}
                 <span className="avatar">{initials}</span>
                 <button className="btn btn-outline btn-sm" onClick={handleLogout}>Logout</button>

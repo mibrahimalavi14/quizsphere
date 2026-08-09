@@ -4,6 +4,7 @@ import { db } from '../db.js';
 import { requireAdmin, signToken } from '../middleware/auth.js';
 import { BADGES } from '../badges.js';
 import { levelInfo } from '../levels.js';
+import { RANKS, rankIndex } from '../ranks.js';
 
 const router = Router();
 
@@ -93,11 +94,12 @@ router.get('/subjects', requireAdmin, (req, res) => {
 });
 
 router.post('/subjects', requireAdmin, (req, res) => {
-  const { name, description, icon, color, is_visible } = req.body || {};
+  const { name, description, icon, color, is_visible, min_rank } = req.body || {};
   if (!name) return res.status(400).json({ error: 'Subject name is required' });
+  const rank = RANKS[rankIndex(min_rank)] ? min_rank : 'bronze';
   try {
-    const info = db.prepare('INSERT INTO subjects (name, description, icon, color, is_visible) VALUES (?, ?, ?, ?, ?)')
-      .run(name.trim(), description || '', icon || '📘', color || '#6366f1', is_visible === undefined ? 1 : (is_visible ? 1 : 0));
+    const info = db.prepare('INSERT INTO subjects (name, description, icon, color, is_visible, min_rank) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(name.trim(), description || '', icon || '📘', color || '#6366f1', is_visible === undefined ? 1 : (is_visible ? 1 : 0), rank);
     const subject = db.prepare('SELECT * FROM subjects WHERE id = ?').get(info.lastInsertRowid);
     res.status(201).json(subject);
   } catch {
@@ -109,14 +111,16 @@ router.put('/subjects/:id', requireAdmin, (req, res) => {
   const b = req.body || {};
   const existing = db.prepare('SELECT * FROM subjects WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Subject not found' });
+  const rank = b.min_rank !== undefined ? (RANKS[rankIndex(b.min_rank)] ? b.min_rank : existing.min_rank) : existing.min_rank;
   try {
-    db.prepare('UPDATE subjects SET name = ?, description = ?, icon = ?, color = ?, is_visible = ? WHERE id = ?')
+    db.prepare('UPDATE subjects SET name = ?, description = ?, icon = ?, color = ?, is_visible = ?, min_rank = ? WHERE id = ?')
       .run(
         b.name?.trim() ?? existing.name,
         b.description ?? existing.description,
         b.icon ?? existing.icon,
         b.color ?? existing.color,
         b.is_visible === undefined ? existing.is_visible : (b.is_visible ? 1 : 0),
+        rank,
         req.params.id
       );
     res.json(db.prepare('SELECT * FROM subjects WHERE id = ?').get(req.params.id));

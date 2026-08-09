@@ -10,6 +10,7 @@ import DailyChallenge from './pages/DailyChallenge';
 import RapidFire from './pages/RapidFire';
 import Result from './pages/Result';
 import Leaderboard from './pages/Leaderboard';
+import Ranks from './pages/Ranks';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
@@ -65,6 +66,7 @@ export default function App() {
             }
           />
           <Route path="/leaderboard" element={<Leaderboard />} />
+          <Route path="/ranks" element={<Ranks />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />

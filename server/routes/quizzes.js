@@ -2,8 +2,23 @@ import { Router } from 'express';
 import { db } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { gradeAndRecord } from '../grader.js';
+import { assertRank, rankMeta } from '../ranks.js';
 
 const router = Router();
+
+function gate(req, res, minRank) {
+  try {
+    assertRank(req.user.xp || 0, minRank);
+    return true;
+  } catch (e) {
+    res.status(e.status || 403).json({ error: e.message, rank: e.rank });
+    return false;
+  }
+}
+
+function getSubject(id) {
+  return db.prepare('SELECT id, name, icon, color, min_rank FROM subjects WHERE id = ?').get(id);
+}
 
 function mulberry32(a) {
   return function () {
@@ -52,6 +67,7 @@ function stripAnswer(q, includeCorrect) {
 router.get('/daily', requireAuth, (req, res) => {
   const dailySubject = db.prepare(`SELECT * FROM subjects WHERE name = 'Daily Challenge'`).get();
   if (!dailySubject) return res.status(500).json({ error: 'Daily challenge not configured' });
+  if (!gate(req, res, dailySubject.min_rank)) return;
 
   const doneToday = db.prepare(`
     SELECT a.* FROM attempts a WHERE a.user_id = ? AND a.mode = 'daily' AND date(a.created_at) = date('now')
@@ -81,8 +97,9 @@ router.get('/daily', requireAuth, (req, res) => {
 });
 
 router.post('/daily/submit', requireAuth, (req, res) => {
-  const dailySubject = db.prepare(`SELECT id FROM subjects WHERE name = 'Daily Challenge'`).get();
+  const dailySubject = db.prepare(`SELECT id, min_rank FROM subjects WHERE name = 'Daily Challenge'`).get();
   if (!dailySubject) return res.status(500).json({ error: 'Daily challenge not configured' });
+  if (!gate(req, res, dailySubject.min_rank)) return;
 
   const doneToday = db.prepare(`
     SELECT id FROM attempts WHERE user_id = ? AND mode = 'daily' AND date(created_at) = date('now')
@@ -101,6 +118,7 @@ router.post('/daily/submit', requireAuth, (req, res) => {
 router.get('/rapid', requireAuth, (req, res) => {
   const rapidSubject = db.prepare(`SELECT * FROM subjects WHERE name = 'Rapid Fire'`).get();
   if (!rapidSubject) return res.status(500).json({ error: 'Rapid fire not configured' });
+  if (!gate(req, res, rapidSubject.min_rank)) return;
 
   const limit = Math.min(Number(req.query.limit) || 10, 10);
   const rows = db.prepare(`
@@ -115,8 +133,9 @@ router.get('/rapid', requireAuth, (req, res) => {
 });
 
 router.post('/rapid/submit', requireAuth, (req, res) => {
-  const rapidSubject = db.prepare(`SELECT id FROM subjects WHERE name = 'Rapid Fire'`).get();
+  const rapidSubject = db.prepare(`SELECT id, min_rank FROM subjects WHERE name = 'Rapid Fire'`).get();
   if (!rapidSubject) return res.status(500).json({ error: 'Rapid fire not configured' });
+  if (!gate(req, res, rapidSubject.min_rank)) return;
 
   const answers = Array.isArray(req.body?.answers) ? req.body.answers : [];
   try {
@@ -134,8 +153,9 @@ router.get('/:subjectId/questions', requireAuth, (req, res) => {
   const mode = req.query.mode || 'quiz';
   const practice = mode === 'practice';
 
-  const subject = db.prepare('SELECT id, name, icon, color FROM subjects WHERE id = ? AND is_visible = 1').get(subjectId);
+  const subject = db.prepare('SELECT id, name, icon, color, min_rank FROM subjects WHERE id = ? AND is_visible = 1').get(subjectId);
   if (!subject) return res.status(404).json({ error: 'Subject not found' });
+  if (!gate(req, res, subject.min_rank)) return;
 
   const where = ['subject_id = ?'];
   const params = [subjectId];
@@ -145,11 +165,11 @@ router.get('/:subjectId/questions', requireAuth, (req, res) => {
   }
   const rows = db.prepare(`SELECT * FROM questions WHERE ${where.join(' AND ')} ORDER BY RANDOM() LIMIT ?`).all(...params, limit);
   if (rows.length === 0) {
-    return res.json({ subject, difficulty, mode, questions: [] });
+    return res.json({ subject: { ...subject, requiredRank: rankMeta(subject.min_rank) }, difficulty, mode, questions: [] });
   }
 
   res.json({
-    subject,
+    subject: { ...subject, requiredRank: rankMeta(subject.min_rank) },
     difficulty,
     mode,
     questions: rows.map((q) => stripAnswer(q, practice)),
@@ -158,6 +178,10 @@ router.get('/:subjectId/questions', requireAuth, (req, res) => {
 
 router.post('/:subjectId/submit', requireAuth, (req, res) => {
   const subjectId = Number(req.params.subjectId);
+  const subject = getSubject(subjectId);
+  if (!subject) return res.status(404).json({ error: 'Subject not found' });
+  if (!gate(req, res, subject.min_rank)) return;
+
   const answers = Array.isArray(req.body?.answers) ? req.body.answers : [];
   const mode = req.body?.mode || 'quiz';
   const negative = Boolean(req.body?.negative);

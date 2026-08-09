@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../context/AuthContext';
+import { canAccessRank } from '../ranks';
 import Loading from '../components/Loading';
 
 export default function Home() {
@@ -25,6 +26,8 @@ export default function Home() {
   }, [isAuthenticated]);
 
   const display = me || user;
+  const myRank = isAuthenticated ? (user?.rankKey || 'bronze') : null;
+  const modeLocked = (key) => myRank !== null && !canAccessRank(myRank, key);
 
   return (
     <>
@@ -63,6 +66,10 @@ export default function Home() {
             {isAuthenticated && display && (
               <>
                 <div className="stat-chip">
+                  <span className="num" style={{ color: display.rankColor }}>{display.rankIcon} {display.rankName}</span>
+                  <span className="lbl">Your Rank</span>
+                </div>
+                <div className="stat-chip">
                   <span className="num" style={{ color: '#a5b4fc' }}>{display.level ?? 1}</span>
                   <span className="lbl">Your Level</span>
                 </div>
@@ -85,12 +92,21 @@ export default function Home() {
               <p>A fresh 5-question challenge every day. Earn double XP and keep your streak alive.</p>
               <span className="m-tag">One attempt per day →</span>
             </Link>
-            <Link to="/quiz/rapid" className="mode-card">
-              <div className="m-icon">🚀</div>
-              <h3>Rapid Fire</h3>
-              <p>10 questions from all subjects with just 10 seconds each. Think fast, score big!</p>
-              <span className="m-tag">Global mixed questions →</span>
-            </Link>
+            {modeLocked('silver') ? (
+              <Link to="/ranks" className="mode-card locked">
+                <div className="m-icon">🚀</div>
+                <h3>Rapid Fire</h3>
+                <p>10 questions from all subjects with just 10 seconds each. Think fast, score big!</p>
+                <span className="m-tag">🔒 Silver rank required →</span>
+              </Link>
+            ) : (
+              <Link to="/quiz/rapid" className="mode-card">
+                <div className="m-icon">🚀</div>
+                <h3>Rapid Fire</h3>
+                <p>10 questions from all subjects with just 10 seconds each. Think fast, score big!</p>
+                <span className="m-tag">Global mixed questions →</span>
+              </Link>
+            )}
             {!isAuthenticated && (
               <Link to="/register" className="mode-card">
                 <div className="m-icon">🏆</div>
@@ -108,8 +124,29 @@ export default function Home() {
           {subjects === null ? (
             <Loading />
           ) : (
-            <div className="subject-grid">
-              {subjects.slice(0, 6).map((s) => (
+          <div className="subject-grid">
+            {subjects.slice(0, 6).map((s) =>
+              myRank && !canAccessRank(myRank, s.min_rank) ? (
+                <Link key={s.id} to="/ranks" className="subject-card locked" style={{ ['--subject-color']: s.color }}>
+                  <div className="subject-icon" style={{ background: `${s.color}22` }}>{s.icon}</div>
+                  <h3>{s.name}</h3>
+                  <p>{s.description}</p>
+                  <div className="subject-meta">
+                    <span>{s.question_count} questions</span>
+                    <span className="lock-tag">🔒</span>
+                  </div>
+                  <div className="locked-overlay">
+                    <div className="locked-badge">
+                      <div className="locked-icon" style={{ color: s.requiredRank?.color }}>🔒</div>
+                      <div>
+                        <b style={{ color: s.requiredRank?.color }}>{s.requiredRank?.icon} {s.requiredRank?.name} required</b>
+                        <small>Reach level {s.requiredRank?.minLevel} to unlock</small>
+                      </div>
+                    </div>
+                    <span className="btn btn-primary btn-sm">See Ranks</span>
+                  </div>
+                </Link>
+              ) : (
                 <Link key={s.id} to={`/subjects/${s.id}/quiz`} className="subject-card" style={{ ['--subject-color']: s.color }}>
                   <div className="subject-icon" style={{ background: `${s.color}22` }}>{s.icon}</div>
                   <h3>{s.name}</h3>
@@ -119,8 +156,9 @@ export default function Home() {
                     <span>→</span>
                   </div>
                 </Link>
-              ))}
-            </div>
+              )
+            )}
+          </div>
           )}
         </div>
       </section>

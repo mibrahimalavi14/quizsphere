@@ -6,8 +6,18 @@ import Loading from '../components/Loading';
 
 const COLORS = ['#6366f1', '#8b5cf6', '#d946ef', '#ec4899', '#f43f5e', '#f59e0b', '#10b981', '#3b82f6', '#0ea5e9', '#14b8a6'];
 const ICONS = ['📘', '🌍', '🔬', '➗', '💻', '🏛️', '📖', '🗺️', '🎨', '🎵', '⚗️', '💰', '🏀', '🚀', '🧮', '⚙️'];
+const RANKS = [
+  { key: 'bronze', name: 'Bronze', icon: '🥉' },
+  { key: 'silver', name: 'Silver', icon: '🥈' },
+  { key: 'gold', name: 'Gold', icon: '🥇' },
+  { key: 'platinum', name: 'Platinum', icon: '💠' },
+  { key: 'diamond', name: 'Diamond', icon: '💎' },
+  { key: 'master', name: 'Master', icon: '🏆' },
+  { key: 'grandmaster', name: 'Grandmaster', icon: '👑' },
+  { key: 'legend', name: 'Legend', icon: '🌟' },
+];
 
-const empty = { name: '', description: '', icon: ICONS[0], color: COLORS[0], is_visible: 1 };
+const empty = { name: '', description: '', icon: ICONS[0], color: COLORS[0], is_visible: 1, min_rank: 'bronze' };
 
 export default function Subjects() {
   const { push } = useToast();
@@ -22,7 +32,7 @@ export default function Subjects() {
   useEffect(() => { load(); }, []);
 
   const openAdd = () => { setForm(empty); setModal('add'); };
-  const openEdit = (s) => { setForm({ name: s.name, description: s.description, icon: s.icon, color: s.color, is_visible: s.is_visible }); setModal('edit'); setConfirmId(s.id); };
+  const openEdit = (s) => { setForm({ name: s.name, description: s.description, icon: s.icon, color: s.color, is_visible: s.is_visible, min_rank: s.min_rank || 'bronze' }); setModal('edit'); setConfirmId(s.id); };
 
   const toggleVisible = async (s) => {
     try {
@@ -92,6 +102,7 @@ export default function Subjects() {
                 <th>Name</th>
                 <th>Description</th>
                 <th>Questions</th>
+                <th>Required Rank</th>
                 <th>Status</th>
                 <th>Color</th>
                 <th style={{ textAlign: 'right' }}>Actions</th>
@@ -104,6 +115,11 @@ export default function Subjects() {
                   <td><b>{s.name}</b></td>
                   <td style={{ color: 'var(--text-dim)', maxWidth: 320 }}>{s.description}</td>
                   <td><span className="badge badge-primary">{s.question_count}</span></td>
+                  <td>
+                    <span className="badge badge-dim">
+                      {RANKS.find((r) => r.key === s.min_rank)?.icon} {RANKS.find((r) => r.key === s.min_rank)?.name || s.min_rank}
+                    </span>
+                  </td>
                   <td>
                     <button
                       className={`btn btn-sm ${s.is_visible ? 'btn-success' : 'btn-outline'}`}
@@ -162,6 +178,14 @@ export default function Subjects() {
                 <select className="input" value={form.is_visible} onChange={(e) => setForm({ ...form, is_visible: Number(e.target.value) })}>
                   <option value={1}>Visible on the public site</option>
                   <option value={0}>Hidden (used by special modes)</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="label">Required Rank (min level to play)</label>
+                <select className="input" value={form.min_rank} onChange={(e) => setForm({ ...form, min_rank: e.target.value })}>
+                  {RANKS.map((r) => (
+                    <option key={r.key} value={r.key}>{r.icon} {r.name}</option>
+                  ))}
                 </select>
               </div>
               <div className="modal-actions">

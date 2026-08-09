@@ -1,7 +1,23 @@
 import { Router } from 'express';
 import { db } from '../db.js';
+import { levelForXp } from '../levels.js';
+import { rankForLevel } from '../ranks.js';
 
 const router = Router();
+
+function decorate(rows) {
+  return rows.map((r, i) => {
+    const rank = rankForLevel(levelForXp(r.xp || 0));
+    return {
+      ...r,
+      rank: i + 1,
+      playerRank: rank.key,
+      playerRankName: rank.name,
+      playerRankIcon: rank.icon,
+      playerRankColor: rank.color,
+    };
+  });
+}
 
 router.get('/', (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 20, 100);
@@ -20,7 +36,7 @@ router.get('/', (req, res) => {
       ORDER BY best_points DESC, best_score DESC, last_played ASC
       LIMIT ?
     `).all(subjectId, limit);
-    return res.json(rows.map((r, i) => ({ ...r, rank: i + 1 })));
+    return res.json(decorate(rows));
   }
 
   const rows = db.prepare(`
@@ -41,7 +57,7 @@ router.get('/', (req, res) => {
     LIMIT ?
   `).all(limit);
 
-  res.json(rows.map((r, i) => ({ ...r, rank: i + 1 })));
+  res.json(decorate(rows));
 });
 
 export default router;
