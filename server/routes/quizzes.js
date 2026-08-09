@@ -20,34 +20,8 @@ function getSubject(id) {
   return db.prepare('SELECT id, name, icon, color, min_rank FROM subjects WHERE id = ?').get(id);
 }
 
-function mulberry32(a) {
-  return function () {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function hashString(str) {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
-  return h;
-}
-
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
-}
-
-function pickSeeded(ids, count, seed) {
-  const arr = [...ids];
-  const rng = mulberry32(hashString(seed));
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr.slice(0, count);
 }
 
 function stripAnswer(q, includeCorrect) {
@@ -77,22 +51,16 @@ router.get('/daily', requireAuth, (req, res) => {
     return res.json({ done: true, subject: { id: dailySubject.id, name: dailySubject.name, icon: dailySubject.icon, color: dailySubject.color }, attempt: doneToday });
   }
 
-  const allIds = db.prepare(`SELECT id FROM questions WHERE subject_id IN (SELECT id FROM subjects WHERE is_visible = 1)`).all().map((r) => r.id);
-  if (allIds.length === 0) return res.json({ done: false, subject: { id: dailySubject.id, name: dailySubject.name, icon: dailySubject.icon, color: dailySubject.color }, questions: [] });
-
-  const picked = pickSeeded(allIds, 5, todayKey());
-  const placeholders = picked.map(() => '?').join(',');
-  const rows = db.prepare(`SELECT * FROM questions WHERE id IN (${placeholders})`).all(...picked);
-  const orderMap = new Map(picked.map((id, i) => [id, i]));
-  const questions = rows
-    .map((q) => stripAnswer(q, false))
-    .sort((a, b) => orderMap.get(a.id) - orderMap.get(b.id));
+  const rows = db.prepare(`
+    SELECT * FROM questions WHERE subject_id IN (SELECT id FROM subjects WHERE is_visible = 1)
+    ORDER BY RANDOM() LIMIT 5
+  `).all();
 
   res.json({
     done: false,
     date: todayKey(),
     subject: { id: dailySubject.id, name: dailySubject.name, icon: dailySubject.icon, color: dailySubject.color },
-    questions,
+    questions: rows.map((q) => stripAnswer(q, false)),
   });
 });
 

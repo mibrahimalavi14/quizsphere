@@ -1,6 +1,6 @@
 import { db } from './db.js';
 
-const TARGET_PER_SUBJECT = 50;
+const TARGET_PER_SUBJECT = 20;
 const SLEEP_MS = 6000;
 const AMOUNT_PER_REQUEST = 50;
 
@@ -11,7 +11,7 @@ const CATEGORY_MAP = {
 };
 
 const POINTS_BY_DIFF = { easy: 1, medium: 2, hard: 3 };
-const TIME_BY_DIFF = { easy: 15, medium: 20, hard: 25 };
+const TIME_BY_DIFF = { easy: 10, medium: 10, hard: 10 };
 
 function shuffle(arr) {
   const a = [...arr];
