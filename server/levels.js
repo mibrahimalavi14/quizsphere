@@ -1,8 +1,15 @@
-export const XP_PER_POINT = 10;
-export const COMPLETION_BONUS = 5;
-export const PERFECT_BONUS = 25;
-export const RAPID_XP_PER_CORRECT = 20;
-export const DAILY_XP_MULTIPLIER = 2;
+export const XP_RULES = {
+  PER_CORRECT: 10,
+  COMPLETION_BONUS: 5,
+  FIRST_QUIZ_BONUS: 25,
+  DAILY_BONUS: 15,
+  RAPID_XP_PER_CORRECT: 20,
+  MILESTONES: [
+    { minScore: 100, xp: 50, label: '100% score' },
+    { minScore: 90, xp: 30, label: '90%+ score' },
+    { minScore: 80, xp: 20, label: '80%+ score' },
+  ],
+};
 
 export function xpForLevelStart(level) {
   return 100 * ((level - 1) * level) / 2;

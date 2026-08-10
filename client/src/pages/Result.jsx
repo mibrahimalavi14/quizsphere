@@ -98,6 +98,9 @@ export default function Result() {
       {xpEarned > 0 && (
         <div className="xp-banner">
           <span>⚡ +{xpEarned} XP earned</span>
+          {submitResult?.firstQuizBonus > 0 && (
+            <span className="badge badge-primary">🎯 +{submitResult.firstQuizBonus} first quiz bonus</span>
+          )}
           {levelInfo && (
             <span className="level-badge">
               Level {levelInfo.level} · {levelInfo.current}/{levelInfo.needed} XP

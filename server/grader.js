@@ -1,13 +1,6 @@
 import { db } from './db.js';
 import { checkAndAwardBadges } from './badges.js';
-import {
-  XP_PER_POINT,
-  COMPLETION_BONUS,
-  PERFECT_BONUS,
-  RAPID_XP_PER_CORRECT,
-  DAILY_XP_MULTIPLIER,
-  levelInfo,
-} from './levels.js';
+import { XP_RULES, levelInfo } from './levels.js';
 
 function gradeAnswers(answers) {
   const ids = answers.map((a) => a.questionId).filter(Boolean);
@@ -36,18 +29,25 @@ function applyNegativeMarking(breakdown, factor) {
   }));
 }
 
-function computeXp({ mode, correctCount, total, earnedPoints }) {
-  if (mode === 'practice') return 0;
-  let xp = 0;
-  if (mode === 'rapid') {
-    xp = correctCount * RAPID_XP_PER_CORRECT;
-  } else {
-    xp = Math.max(0, earnedPoints) * XP_PER_POINT;
-    xp += COMPLETION_BONUS;
-    if (correctCount === total && total > 0) xp += PERFECT_BONUS;
+function milestoneBonus(score) {
+  for (const m of XP_RULES.MILESTONES) {
+    if (score >= m.minScore) return m.xp;
   }
-  if (mode === 'daily') xp *= DAILY_XP_MULTIPLIER;
-  return Math.round(xp);
+  return 0;
+}
+
+// Transparent, server-side XP rules. Client never submits XP — it is
+// always derived here from the graded attempt.
+function computeXp({ mode, correctCount, total, score }) {
+  if (mode === 'practice') return 0;
+  if (mode === 'rapid') return correctCount * XP_RULES.RAPID_XP_PER_CORRECT;
+
+  let xp = correctCount * XP_RULES.PER_CORRECT
+    + XP_RULES.COMPLETION_BONUS
+    + milestoneBonus(score);
+
+  if (mode === 'daily') xp += XP_RULES.DAILY_BONUS;
+  return xp;
 }
 
 function updateStreak(userId) {
@@ -87,8 +87,12 @@ export function gradeAndRecord({ userId, subjectId, answers, mode = 'quiz', nega
   const earnedPoints = graded.reduce((s, b) => s + b.pointsEarned, 0);
   const totalPoints = graded.reduce((s, b) => s + b.pointsAvailable, 0);
   const score = Math.round((correctCount / graded.length) * 100);
-  const xpEarned = computeXp({ mode, correctCount, total: graded.length, earnedPoints });
   const safeDuration = Math.max(0, Math.floor(Number(durationSeconds) || 0));
+
+  const isFirstQuiz = mode !== 'practice'
+    && db.prepare(`SELECT COUNT(*) AS c FROM attempts WHERE user_id = ? AND mode != 'practice'`).get(userId).c === 0;
+  let xpEarned = computeXp({ mode, correctCount, total: graded.length, score });
+  if (isFirstQuiz) xpEarned += XP_RULES.FIRST_QUIZ_BONUS;
 
   const attempt = db.prepare(`
     INSERT INTO attempts (user_id, subject_id, mode, negative, score, correct_answers, total_questions, earned_points, total_points, xp_earned, duration_seconds)
@@ -127,6 +131,7 @@ export function gradeAndRecord({ userId, subjectId, answers, mode = 'quiz', nega
     earnedPoints: Math.max(earnedPoints, 0),
     totalPoints,
     xpEarned,
+    firstQuizBonus: isFirstQuiz ? XP_RULES.FIRST_QUIZ_BONUS : 0,
     durationSeconds: safeDuration,
     ...xpResult,
     streak: streakInfo,

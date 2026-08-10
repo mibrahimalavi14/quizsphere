@@ -22,6 +22,21 @@ export function requireAuth(req, res, next) {
   }
 }
 
+export function optionalAuth(req, res, next) {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (token) {
+    try {
+      const payload = jwt.verify(token, JWT_SECRET);
+      const user = db.prepare('SELECT id, name, email, is_admin, xp FROM users WHERE id = ?').get(payload.id);
+      if (user) req.user = user;
+    } catch {
+      /* ignore invalid tokens */
+    }
+  }
+  next();
+}
+
 export function requireAdmin(req, res, next) {
   requireAuth(req, res, () => {
     if (!req.user.is_admin) return res.status(403).json({ error: 'Admin access required' });

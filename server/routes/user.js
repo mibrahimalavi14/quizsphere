@@ -136,6 +136,26 @@ router.get('/dashboard', requireAuth, (req, res) => {
     ORDER BY a.id DESC LIMIT 50
   `).all(uid);
 
+  const rankRow = db.prepare('SELECT COUNT(*) + 1 AS rank FROM users WHERE is_admin = 0 AND xp > ?').get(user.xp || 0);
+  const myWeekXp = db.prepare(`SELECT COALESCE(SUM(xp_earned),0) AS px FROM attempts WHERE user_id = ? AND mode != 'practice' AND total_questions >= 2 AND created_at >= datetime('now', '-7 days')`).get(uid).px || 0;
+  const myMonthXp = db.prepare(`SELECT COALESCE(SUM(xp_earned),0) AS px FROM attempts WHERE user_id = ? AND mode != 'practice' AND total_questions >= 2 AND created_at >= datetime('now', '-30 days')`).get(uid).px || 0;
+  const weekRow = db.prepare(`
+    SELECT COUNT(*) + 1 AS rank FROM (
+      SELECT user_id, SUM(xp_earned) AS px FROM attempts
+      WHERE mode != 'practice' AND total_questions >= 2
+        AND created_at >= datetime('now', '-7 days')
+      GROUP BY user_id HAVING px > ?
+    )
+  `).get(myWeekXp);
+  const monthRow = db.prepare(`
+    SELECT COUNT(*) + 1 AS rank FROM (
+      SELECT user_id, SUM(xp_earned) AS px FROM attempts
+      WHERE mode != 'practice' AND total_questions >= 2
+        AND created_at >= datetime('now', '-30 days')
+      GROUP BY user_id HAVING px > ?
+    )
+  `).get(myMonthXp);
+
   const allSubjects = db.prepare(`
     SELECT id, name, icon, color, min_rank FROM subjects
     WHERE is_visible = 1 AND name NOT IN ('Daily Challenge', 'Rapid Fire')
@@ -208,6 +228,11 @@ router.get('/dashboard', requireAuth, (req, res) => {
       highest: summary.highest || 0,
       questionsSolved: summary.questions_solved || 0,
       totalXp: summary.total_xp || 0,
+    },
+    ranks: {
+      global: rankRow.rank || 1,
+      weekly: weekRow.rank || 1,
+      monthly: monthRow.rank || 1,
     },
     cwu: {
       correct: cwu.correct || 0,

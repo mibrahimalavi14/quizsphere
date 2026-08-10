@@ -50,7 +50,7 @@ export default function Profile() {
 
   if (!data) return <Loading />;
 
-  const { user, summary, cwu, subjects, timeline, attempts, recommendations } = data;
+  const { user, summary, cwu, subjects, timeline, attempts, recommendations, ranks } = data;
   const strongest = data.strongest;
   const weakest = data.weakest;
   const recent = attempts.slice(0, 5);
@@ -182,12 +182,40 @@ export default function Profile() {
                       <div className="b-icon">{b.icon}</div>
                       <div className="b-name">{b.name}</div>
                       <div className="b-desc">{b.desc}</div>
-                      {b.earned && <div className="b-tag">Unlocked 🎉</div>}
+                      {b.earned ? (
+                        <div className="b-tag">Unlocked 🎉</div>
+                      ) : (
+                        <div className="badge-progress-wrap" title={`${b.current} / ${b.target}`}>
+                          <div className="badge-progress-track">
+                            <div className="badge-progress-fill" style={{ width: `${b.progress}%` }}></div>
+                          </div>
+                          <div className="badge-progress-label">{b.progress}% · {b.current}/{b.target}</div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
               )}
             </div>
+          </div>
+        </div>
+
+        <div className="rank-summary">
+          <div className="rank-summary-item">
+            <div className="rank-summary-value">#{ranks?.global ?? '—'}</div>
+            <div className="rank-summary-label">🏆 Global Rank</div>
+          </div>
+          <div className="rank-summary-item">
+            <div className="rank-summary-value">#{ranks?.weekly ?? '—'}</div>
+            <div className="rank-summary-label">📅 Weekly Rank</div>
+          </div>
+          <div className="rank-summary-item">
+            <div className="rank-summary-value">#{ranks?.monthly ?? '—'}</div>
+            <div className="rank-summary-label">📆 Monthly Rank</div>
+          </div>
+          <div className="rank-summary-item">
+            <div className="rank-summary-value">{badges ? badges.totalEarned : '—'}</div>
+            <div className="rank-summary-label">🏅 Badges Earned</div>
           </div>
         </div>
 
