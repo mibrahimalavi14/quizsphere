@@ -76,7 +76,7 @@ router.post('/daily/submit', requireAuth, (req, res) => {
 
   const answers = Array.isArray(req.body?.answers) ? req.body.answers : [];
   try {
-    const result = gradeAndRecord({ userId: req.user.id, subjectId: dailySubject.id, answers, mode: 'daily' });
+    const result = gradeAndRecord({ userId: req.user.id, subjectId: dailySubject.id, answers, mode: 'daily', durationSeconds: req.body?.durationSeconds });
     res.status(201).json(result);
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });
@@ -107,7 +107,7 @@ router.post('/rapid/submit', requireAuth, (req, res) => {
 
   const answers = Array.isArray(req.body?.answers) ? req.body.answers : [];
   try {
-    const result = gradeAndRecord({ userId: req.user.id, subjectId: rapidSubject.id, answers, mode: 'rapid' });
+    const result = gradeAndRecord({ userId: req.user.id, subjectId: rapidSubject.id, answers, mode: 'rapid', durationSeconds: req.body?.durationSeconds });
     res.status(201).json(result);
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });
@@ -158,7 +158,7 @@ router.post('/:subjectId/submit', requireAuth, (req, res) => {
   if (!allowedModes.includes(mode)) return res.status(400).json({ error: 'Invalid mode' });
 
   try {
-    const result = gradeAndRecord({ userId: req.user.id, subjectId, answers, mode, negative });
+    const result = gradeAndRecord({ userId: req.user.id, subjectId, answers, mode, negative, durationSeconds: req.body?.durationSeconds });
     res.status(201).json(result);
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });

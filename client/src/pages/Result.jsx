@@ -31,13 +31,32 @@ export default function Result() {
 
   if (!result) return <Loading />;
 
+  const answeredArr = result.answers || [];
+  const answered = answeredArr.filter((a) => a.selected !== null && a.selected !== undefined).length;
+  const unanswered = result.total_questions - answered;
+  const correctCount = result.correct_answers;
+  const wrongCount = Math.max(answered - correctCount, 0);
   const pct = result.total_questions ? Math.round((result.correct_answers / result.total_questions) * 100) : 0;
-  const passed = pct >= 50;
+  const passed = pct >= 40;
+  const grade =
+    pct >= 80 ? { letter: 'A', msg: 'Excellent work!' } :
+    pct >= 65 ? { letter: 'B', msg: 'Great job!' } :
+    pct >= 50 ? { letter: 'C', msg: 'Good effort!' } :
+    pct >= 40 ? { letter: 'D', msg: 'Keep practicing — you are close!' } :
+    { letter: 'F', msg: 'Don\'t give up — review the answers and try again!' };
+
+  const formatTime = (sec) => {
+    const s = Math.max(0, Number(sec) || 0);
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${m}:${String(r).padStart(2, '0')}`;
+  };
+
   const newBadges = submitResult?.newBadges || [];
   const levelInfo = submitResult?.levelInfo || null;
   const xpEarned = result.xp_earned ?? submitResult?.xpEarned ?? 0;
 
-  const shareText = `I scored ${result.score}% on the ${result.subject_name} quiz on QuizSphere! 🧠`;
+  const shareText = `I scored ${result.score}% (Grade ${grade.letter}) on the ${result.subject_name} quiz on QuizSphere! 🧠`;
   const shareUrl = window.location.origin;
 
   const copyLink = async () => {
@@ -68,9 +87,12 @@ export default function Result() {
         <div className="result-score" style={{ ['--pct']: pct }}>
           <div className="inner">
             <div className="pct">{pct}%</div>
-            <div className="pct-label">{passed ? 'Passed' : 'Keep Practicing'}</div>
+            <div className="pct-label">
+              {passed ? 'Passed' : 'Failed'} · Grade <b>{grade.letter}</b>
+            </div>
           </div>
         </div>
+        <p style={{ color: 'var(--text-dim)', marginTop: 12 }}>{grade.msg}</p>
       </div>
 
       {xpEarned > 0 && (
@@ -116,20 +138,36 @@ export default function Result() {
 
       <div className="result-stats">
         <div className="result-stat">
-          <div className="v" style={{ color: '#a5b4fc' }}>{result.score}</div>
-          <div className="l">Score / 100</div>
+          <div className="v" style={{ color: 'var(--warning)' }}>{result.earned_points}/{result.total_points}</div>
+          <div className="l">Marks</div>
         </div>
         <div className="result-stat">
-          <div className="v" style={{ color: 'var(--success)' }}>{result.correct_answers}</div>
+          <div className="v" style={{ color: '#a5b4fc' }}>{pct}%</div>
+          <div className="l">Percentage</div>
+        </div>
+        <div className="result-stat">
+          <div className="v" style={{ color: 'var(--text)' }}>{grade.letter}</div>
+          <div className="l">Grade</div>
+        </div>
+        <div className="result-stat">
+          <div className="v" style={{ color: 'var(--success)' }}>{correctCount}</div>
           <div className="l">Correct</div>
         </div>
         <div className="result-stat">
-          <div className="v" style={{ color: 'var(--danger)' }}>{result.total_questions - result.correct_answers}</div>
+          <div className="v" style={{ color: 'var(--danger)' }}>{wrongCount}</div>
           <div className="l">Wrong</div>
         </div>
         <div className="result-stat">
-          <div className="v" style={{ color: 'var(--warning)' }}>+{result.earned_points}</div>
-          <div className="l">Points</div>
+          <div className="v" style={{ color: 'var(--text-faint)' }}>{unanswered}</div>
+          <div className="l">Unanswered</div>
+        </div>
+        <div className="result-stat">
+          <div className="v" style={{ color: 'var(--text-dim)' }}>{formatTime(result.duration_seconds)}</div>
+          <div className="l">Time Taken</div>
+        </div>
+        <div className="result-stat">
+          <div className="v" style={{ color: '#a5b4fc' }}>+{result.xp_earned ?? 0}</div>
+          <div className="l">XP Earned</div>
         </div>
       </div>
 

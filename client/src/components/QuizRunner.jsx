@@ -12,52 +12,76 @@ export default function QuizRunner({ subject, questions, mode = 'quiz', negative
   const { refreshUser } = useAuth();
 
   const practice = mode === 'practice';
-  const noBack = mode === 'daily' || mode === 'rapid';
 
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState({});
+  const [reviewed, setReviewed] = useState({});
   const [revealed, setRevealed] = useState({});
   const [remaining, setRemaining] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const submittedRef = useRef(false);
   const answersRef = useRef(answers);
   answersRef.current = answers;
+  const startTimeRef = useRef(Date.now());
 
   useEffect(() => {
-    if (questions.length) setRemaining(questions[0].timeLimit);
+    if (questions.length) {
+      setRemaining(questions[0].timeLimit);
+      startTimeRef.current = Date.now();
+    }
   }, [questions]);
 
   const currentQuestion = questions[current];
   const answeredCount = Object.keys(answers).filter((qid) => answers[qid] !== null && answers[qid] !== undefined).length;
+  const unansweredCount = questions.length - answeredCount;
+  const reviewedCount = Object.keys(reviewed).filter((qid) => reviewed[qid]).length;
 
   const submitQuiz = async () => {
     if (submittedRef.current) return;
     submittedRef.current = true;
     setSubmitting(true);
     try {
+      const durationSeconds = Math.round((Date.now() - startTimeRef.current) / 1000);
       const payload = questions.map((q) => ({
         questionId: q.id,
         selected: answersRef.current[q.id] === undefined ? null : answersRef.current[q.id],
       }));
-      const result = await api.post(submitUrl, { answers: payload, mode, negative });
+      const result = await api.post(submitUrl, { answers: payload, mode, negative, durationSeconds });
       refreshUser().catch(() => {});
       navigate(`/result/${result.attemptId}`, { state: { result } });
     } catch (e) {
       push(e.message, 'error');
       setSubmitting(false);
       submittedRef.current = false;
+      setShowConfirm(false);
     }
   };
 
   const goNext = () => {
     if (current >= questions.length - 1) {
-      submitQuiz();
+      setShowConfirm(true);
     } else {
       const next = current + 1;
       setCurrent(next);
       setRemaining(questions[next].timeLimit);
       setRevealed((r) => ({ ...r, [currentQuestion.id]: r[currentQuestion.id] ?? false }));
     }
+  };
+
+  const goPrev = () => {
+    if (current <= 0) return;
+    const prev = current - 1;
+    setCurrent(prev);
+    setRemaining(questions[prev].timeLimit);
+  };
+
+  const jumpTo = (idx) => {
+    if (idx === current) return;
+    setCurrent(idx);
+    setRemaining(questions[idx].timeLimit);
+    setNavOpen(false);
   };
 
   useEffect(() => {
@@ -67,7 +91,11 @@ export default function QuizRunner({ subject, questions, mode = 'quiz', negative
         if (r <= 1) {
           clearInterval(t);
           setRevealed((rev) => ({ ...rev, [currentQuestion.id]: true }));
-          goNext();
+          if (current >= questions.length - 1) {
+            submitQuiz();
+          } else {
+            goNext();
+          }
           return 0;
         }
         return r - 1;
@@ -86,6 +114,11 @@ export default function QuizRunner({ subject, questions, mode = 'quiz', negative
     } else {
       setTimeout(goNext, 220);
     }
+  };
+
+  const toggleReview = () => {
+    if (practice || submitting) return;
+    setReviewed((r) => ({ ...r, [currentQuestion.id]: !r[currentQuestion.id] }));
   };
 
   const timeBar = useMemo(() => {
@@ -107,6 +140,15 @@ export default function QuizRunner({ subject, questions, mode = 'quiz', negative
     return cls;
   };
 
+  const navClass = (idx) => {
+    const qid = questions[idx].id;
+    let cls = 'qn';
+    if (idx === current) cls += ' current';
+    if (answers[qid] !== null && answers[qid] !== undefined) cls += ' answered';
+    if (reviewed[qid]) cls += ' review';
+    return cls;
+  };
+
   const modeBadge = {
     quiz: <span className="mode-badge mode-quiz">Test Mode</span>,
     practice: <span className="mode-badge mode-practice">Practice</span>,
@@ -123,6 +165,27 @@ export default function QuizRunner({ subject, questions, mode = 'quiz', negative
   return (
     <div className="container">
       <div className="quiz-layout">
+        <div className="quiz-sidebar">
+          <div className="qnav-card">
+            <div className="qnav-head">
+              <span>Questions</span>
+              <span className="badge badge-dim">{answeredCount}/{questions.length} answered</span>
+            </div>
+            <div className="qnav-grid">
+              {questions.map((q, i) => (
+                <button key={q.id} className={navClass(i)} onClick={() => jumpTo(i)}>
+                  {i + 1}
+                </button>
+              ))}
+            </div>
+            <div className="qnav-legend">
+              <span><i className="dot dot-answered"></i> Answered</span>
+              <span><i className="dot dot-review"></i> For Review</span>
+              <span><i className="dot dot-unanswered"></i> Unanswered</span>
+            </div>
+          </div>
+        </div>
+
         <div className="quiz-main">
           <div className="quiz-topbar">
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -153,6 +216,7 @@ export default function QuizRunner({ subject, questions, mode = 'quiz', negative
               <span className="badge badge-primary">⭐ {currentQuestion.points} pts</span>
               {!practice && <span className="badge badge-dim">⏱ {currentQuestion.timeLimit}s</span>}
               <span className="badge badge-success">✔ {answeredCount} answered</span>
+              {reviewed[currentQuestion.id] && <span className="badge badge-review">📌 For Review</span>}
             </div>
             <div className="q-text">{currentQuestion.question}</div>
             <div className="option-list">
@@ -172,29 +236,72 @@ export default function QuizRunner({ subject, questions, mode = 'quiz', negative
               </div>
             )}
             <div className="quiz-actions">
-              <button
-                className="btn btn-ghost"
-                disabled={current === 0 || submitting || noBack}
-                onClick={() => {
-                  setCurrent((c) => c - 1);
-                  setRemaining(questions[current - 1].timeLimit);
-                }}
-              >
-                ← Back
+              {!practice && (
+                <button className="btn btn-outline" disabled={submitting} onClick={toggleReview}>
+                  {reviewed[currentQuestion.id] ? '✓ Marked' : '📌 Review'}
+                </button>
+              )}
+              <button className="btn btn-ghost" disabled={current === 0 || submitting} onClick={goPrev}>
+                ← Prev
               </button>
-              <button
-                className="btn btn-primary"
-                disabled={submitting || (practice && !revealed[currentQuestion.id])}
-                onClick={goNext}
-              >
-                {current >= questions.length - 1
-                  ? (submitting ? 'Submitting…' : 'Finish')
-                  : practice ? 'Next →' : 'Next →'}
+              {current >= questions.length - 1 ? (
+                <button className="btn btn-primary" disabled={submitting} onClick={() => setShowConfirm(true)}>
+                  {submitting ? 'Submitting…' : 'Submit Quiz'}
+                </button>
+              ) : (
+                <button className="btn btn-primary" disabled={submitting} onClick={goNext}>
+                  Next →
+                </button>
+              )}
+            </div>
+            {!practice && (
+              <button className="btn btn-ghost btn-sm nav-toggle" onClick={() => setNavOpen(!navOpen)}>
+                {navOpen ? 'Hide question list ▲' : 'Show question list ▼'}
+              </button>
+            )}
+          </div>
+          {navOpen && (
+            <div className="qnav-card qnav-mobile">
+              <div className="qnav-grid">
+                {questions.map((q, i) => (
+                  <button key={q.id} className={navClass(i)} onClick={() => jumpTo(i)}>
+                    {i + 1}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {showConfirm && (
+        <div className="modal-backdrop" onClick={() => !submitting && setShowConfirm(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Submit Quiz?</h3>
+            <p style={{ color: 'var(--text-dim)', marginBottom: 14 }}>
+              You are about to submit your quiz. This cannot be undone.
+            </p>
+            <div className="result-stats" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))' }}>
+              <div className="result-stat"><div className="v" style={{ color: 'var(--success)' }}>{answeredCount}</div><div className="l">Answered</div></div>
+              <div className="result-stat"><div className="v" style={{ color: 'var(--danger)' }}>{unansweredCount}</div><div className="l">Unanswered</div></div>
+              {reviewedCount > 0 && (
+                <div className="result-stat"><div className="v" style={{ color: 'var(--warning)' }}>{reviewedCount}</div><div className="l">For Review</div></div>
+              )}
+            </div>
+            {unansweredCount > 0 && (
+              <p style={{ color: 'var(--warning)', fontSize: 13.5, marginTop: 10 }}>
+                ⚠ {unansweredCount} question{unansweredCount > 1 ? 's' : ''} unanswered will be marked wrong.
+              </p>
+            )}
+            <div className="modal-actions">
+              <button className="btn btn-outline" disabled={submitting} onClick={() => setShowConfirm(false)}>Keep Working</button>
+              <button className="btn btn-primary" disabled={submitting} onClick={submitQuiz}>
+                {submitting ? 'Submitting…' : 'Submit Quiz'}
               </button>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

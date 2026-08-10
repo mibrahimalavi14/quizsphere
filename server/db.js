@@ -204,6 +204,7 @@ const migrate = () => {
   if (!columnExists('attempts', 'mode')) db.exec(`ALTER TABLE attempts ADD COLUMN mode TEXT NOT NULL DEFAULT 'quiz'`);
   if (!columnExists('attempts', 'negative')) db.exec(`ALTER TABLE attempts ADD COLUMN negative INTEGER NOT NULL DEFAULT 0`);
   if (!columnExists('attempts', 'xp_earned')) db.exec(`ALTER TABLE attempts ADD COLUMN xp_earned INTEGER NOT NULL DEFAULT 0`);
+  if (!columnExists('attempts', 'duration_seconds')) db.exec(`ALTER TABLE attempts ADD COLUMN duration_seconds INTEGER NOT NULL DEFAULT 0`);
 };
 
 migrate();

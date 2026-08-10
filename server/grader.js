@@ -67,7 +67,7 @@ function updateStreak(userId) {
   return { currentStreak: streak, maxStreak };
 }
 
-export function gradeAndRecord({ userId, subjectId, answers, mode = 'quiz', negative = false }) {
+export function gradeAndRecord({ userId, subjectId, answers, mode = 'quiz', negative = false, durationSeconds = 0 }) {
   const subject = db.prepare('SELECT id, name, icon, color FROM subjects WHERE id = ?').get(subjectId);
   if (!subject) {
     const err = new Error('Subject not found');
@@ -88,11 +88,12 @@ export function gradeAndRecord({ userId, subjectId, answers, mode = 'quiz', nega
   const totalPoints = graded.reduce((s, b) => s + b.pointsAvailable, 0);
   const score = Math.round((correctCount / graded.length) * 100);
   const xpEarned = computeXp({ mode, correctCount, total: graded.length, earnedPoints });
+  const safeDuration = Math.max(0, Math.floor(Number(durationSeconds) || 0));
 
   const attempt = db.prepare(`
-    INSERT INTO attempts (user_id, subject_id, mode, negative, score, correct_answers, total_questions, earned_points, total_points, xp_earned)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(userId, subjectId, mode, negative ? 1 : 0, score, correctCount, graded.length, Math.max(earnedPoints, 0), totalPoints, xpEarned);
+    INSERT INTO attempts (user_id, subject_id, mode, negative, score, correct_answers, total_questions, earned_points, total_points, xp_earned, duration_seconds)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(userId, subjectId, mode, negative ? 1 : 0, score, correctCount, graded.length, Math.max(earnedPoints, 0), totalPoints, xpEarned, safeDuration);
 
   const insertAnswer = db.prepare(`
     INSERT INTO answers (attempt_id, question_id, selected, is_correct, points_earned)
@@ -126,6 +127,7 @@ export function gradeAndRecord({ userId, subjectId, answers, mode = 'quiz', nega
     earnedPoints: Math.max(earnedPoints, 0),
     totalPoints,
     xpEarned,
+    durationSeconds: safeDuration,
     ...xpResult,
     streak: streakInfo,
     newBadges,
