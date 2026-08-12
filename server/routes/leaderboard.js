@@ -58,15 +58,15 @@ router.get('/', optionalAuth, (req, res) => {
     WHERE ${scopeClause(subjectId)}u.is_admin = 0
     GROUP BY u.id
     HAVING quizzes > 0
-    ORDER BY ${period === 'all' ? 'u.xp' : 'period_xp'} DESC, best_score DESC, u.id ASC
+    ORDER BY ${period === 'all' ? 'u.rank_xp' : 'period_xp'} DESC, best_score DESC, u.id ASC
     LIMIT ?
   `).all(...(subjectId ? [subjectId] : []), limit);
 
   let me = null;
   if (userId) {
     if (period === 'all' && !subjectId) {
-      const r = db.prepare('SELECT COUNT(*) + 1 AS rank FROM users WHERE is_admin = 0 AND xp > ?').get(
-        db.prepare('SELECT xp FROM users WHERE id = ?').get(userId)?.xp || 0
+      const r = db.prepare('SELECT COUNT(*) + 1 AS rank FROM users WHERE is_admin = 0 AND rank_xp > ?').get(
+        db.prepare('SELECT rank_xp FROM users WHERE id = ?').get(userId)?.rank_xp || 0
       );
       me = { rank: r.rank };
     } else {

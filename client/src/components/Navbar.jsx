@@ -33,6 +33,7 @@ export default function Navbar() {
           <NavLink to="/" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={() => setOpen(false)}>Home</NavLink>
           <NavLink to="/quiz/daily" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={() => setOpen(false)}>Daily 📅</NavLink>
           <NavLink to="/quiz/rapid" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={() => setOpen(false)}>Rapid ⚡</NavLink>
+          <NavLink to="/tests" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={() => setOpen(false)}>Tests 🎯</NavLink>
           <NavLink to="/subjects" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={() => setOpen(false)}>Subjects</NavLink>
           <NavLink to="/ranks" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={() => setOpen(false)}>Ranks 🏅</NavLink>
           <NavLink to="/leaderboard" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} onClick={() => setOpen(false)}>Leaderboard</NavLink>

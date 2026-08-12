@@ -6,6 +6,12 @@ import Loading from '../components/Loading';
 
 const OPTION_KEYS = ['A', 'B', 'C', 'D'];
 
+const difficultyChip = (d) => (
+  <span className={`difficulty-chip difficulty-${d}`}>
+    {d === 'easy' ? 'Easy' : d === 'hard' ? 'Hard' : 'Medium'}
+  </span>
+);
+
 export default function Result() {
   const { attemptId } = useParams();
   const location = useLocation();
@@ -13,11 +19,22 @@ export default function Result() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [certId, setCertId] = useState(null);
   const submitResult = location.state?.result || null;
 
   useEffect(() => {
     api.get(`/user/attempts/${attemptId}`).then(setResult).catch((e) => setError(e.message));
   }, [attemptId]);
+
+  useEffect(() => {
+    if (result?.mode !== 'mock' || result?.score < 60) return;
+    api.get('/user/certificates')
+      .then((certs) => {
+        const c = certs.find((x) => x.attempt_id === Number(attemptId));
+        if (c) setCertId(c.id);
+      })
+      .catch(() => {});
+  }, [result?.mode, result?.score, attemptId]);
 
   if (error) {
     return (
@@ -55,6 +72,8 @@ export default function Result() {
   const newBadges = submitResult?.newBadges || [];
   const levelInfo = submitResult?.levelInfo || null;
   const xpEarned = result.xp_earned ?? submitResult?.xpEarned ?? 0;
+  const isPractice = result.mode === 'practice';
+  const practiceXp = result.practiceType === 'mistakes' ? xpEarned : 0;
 
   const shareText = `I scored ${result.score}% (Grade ${grade.letter}) on the ${result.subject_name} quiz on QuizSphere! 🧠`;
   const shareUrl = window.location.origin;
@@ -75,7 +94,40 @@ export default function Result() {
     practice: <span className="mode-badge mode-practice">Practice</span>,
     daily: <span className="mode-badge mode-daily">Daily Challenge</span>,
     rapid: <span className="mode-badge mode-rapid">Rapid Fire</span>,
+    weekly: <span className="mode-badge mode-weekly">Weekly Challenge</span>,
+    mock: <span className="mode-badge mode-mock">Mock Test</span>,
   }[result.mode];
+
+  const formatSec = (sec) => {
+    const s = Math.max(0, Number(sec) || 0);
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${m}:${String(r).padStart(2, '0')}`;
+  };
+
+  const isMock = result.mode === 'mock';
+  const passedMock = isMock && result.score >= 60;
+  const analysis = isMock && result.answers?.length
+    ? (() => {
+        const byDiff = {};
+        let totalMs = 0;
+        for (const a of result.answers) {
+          const d = a.difficulty || 'medium';
+          if (!byDiff[d]) byDiff[d] = { correct: 0, total: 0 };
+          byDiff[d].total += 1;
+          if (a.isCorrect) byDiff[d].correct += 1;
+          totalMs += a.timeTakenMs || 0;
+        }
+        const sorted = result.answers.slice().sort((x, y) => (y.timeTakenMs || 0) - (x.timeTakenMs || 0));
+        return {
+          byDiff,
+          totalMs,
+          avgMs: result.answers.length ? totalMs / result.answers.length : 0,
+          slowest: sorted[0] || null,
+          fastest: sorted[sorted.length - 1] || null,
+        };
+      })()
+    : null;
 
   return (
     <div className="container">
@@ -95,7 +147,7 @@ export default function Result() {
         <p style={{ color: 'var(--text-dim)', marginTop: 12 }}>{grade.msg}</p>
       </div>
 
-      {xpEarned > 0 && (
+      {xpEarned > 0 && !isPractice && (
         <div className="xp-banner">
           <span>⚡ +{xpEarned} XP earned</span>
           {submitResult?.firstQuizBonus > 0 && (
@@ -105,6 +157,16 @@ export default function Result() {
             <span className="level-badge">
               Level {levelInfo.level} · {levelInfo.current}/{levelInfo.needed} XP
             </span>
+          )}
+        </div>
+      )}
+
+      {isPractice && (
+        <div className="practice-xp-banner">
+          <span>🧠 Practice XP earned</span>
+          <span className="badge badge-primary">⚡ +{practiceXp} XP</span>
+          {(result.newlyMastered ?? submitResult?.newlyMastered ?? 0) > 0 && (
+            <span className="badge badge-success">✅ {result.newlyMastered ?? submitResult?.newlyMastered ?? 0} mastered</span>
           )}
         </div>
       )}
@@ -175,44 +237,103 @@ export default function Result() {
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'center', gap: 12, margin: '10px 0 30px', flexWrap: 'wrap' }}>
-        {result.mode === 'daily' ? (
+        {isPractice && result.practiceType === 'mistakes' ? (
+          <Link to="/quiz/mistakes" className="btn btn-primary">Practice Next Mistakes 🔁</Link>
+        ) : result.mode === 'weekly' ? (
+          <Link to="/tests" className="btn btn-primary">Back to Test Center</Link>
+        ) : result.mode === 'daily' ? (
           <Link to="/" className="btn btn-primary">Back to Home</Link>
         ) : result.mode === 'rapid' ? (
           <Link to="/quiz/rapid" className="btn btn-primary">Play Again 🔁</Link>
+        ) : result.mode === 'mock' ? (
+          <Link to={`/retake/${result.id}`} className="btn btn-primary">Retake 🔁</Link>
         ) : (
           <Link to={`/subjects/${result.subject_id}/quiz`} className="btn btn-primary">Play Again</Link>
+        )}
+        {!isPractice && result.mode !== 'mock' && (
+          <Link to="/quiz/mistakes" className="btn btn-outline">🧠 Practice Mistakes</Link>
+        )}
+        {passedMock && (
+          <Link to={certId ? `/certificate/${certId}` : '/tests'} className="btn btn-success">
+            🏅 {certId ? 'View Certificate' : 'Get Certificate'}
+          </Link>
         )}
         <Link to="/leaderboard" className="btn btn-ghost">View Leaderboard</Link>
         <Link to="/profile" className="btn btn-outline">My Profile</Link>
       </div>
 
+      {analysis && (
+        <div className="result-breakdown" style={{ marginTop: 26 }}>
+          <div className="card" style={{ padding: '22px 26px' }}>
+            <h3 style={{ marginBottom: 14, fontSize: 20 }}>📊 Mock Test Analysis</h3>
+            <div className="analytics-grid" style={{ marginTop: 4 }}>
+              <div className="panel">
+                <h3 className="panel-title">🎯 Accuracy by Difficulty</h3>
+                <div className="stack-row">
+                  <div className="stack-label"><span className="dot dot-answered"></span> Easy</div>
+                  <div className="stack-track"><div className="stack-fill" style={{ width: `${(analysis.byDiff.easy?.total ? (analysis.byDiff.easy.correct / analysis.byDiff.easy.total) * 100 : 0)}%`, background: 'var(--success)' }}></div></div>
+                  <div className="stack-count">{analysis.byDiff.easy?.correct || 0}/{analysis.byDiff.easy?.total || 0}</div>
+                </div>
+                <div className="stack-row">
+                  <div className="stack-label"><span className="dot dot-review"></span> Medium</div>
+                  <div className="stack-track"><div className="stack-fill" style={{ width: `${(analysis.byDiff.medium?.total ? (analysis.byDiff.medium.correct / analysis.byDiff.medium.total) * 100 : 0)}%`, background: 'var(--warning)' }}></div></div>
+                  <div className="stack-count">{analysis.byDiff.medium?.correct || 0}/{analysis.byDiff.medium?.total || 0}</div>
+                </div>
+                <div className="stack-row">
+                  <div className="stack-label"><span className="dot dot-unanswered"></span> Hard</div>
+                  <div className="stack-track"><div className="stack-fill" style={{ width: `${(analysis.byDiff.hard?.total ? (analysis.byDiff.hard.correct / analysis.byDiff.hard.total) * 100 : 0)}%`, background: 'var(--danger)' }}></div></div>
+                  <div className="stack-count">{analysis.byDiff.hard?.correct || 0}/{analysis.byDiff.hard?.total || 0}</div>
+                </div>
+              </div>
+              <div className="panel">
+                <h3 className="panel-title">⏱ Time Analysis</h3>
+                <div className="result-stats" style={{ gridTemplateColumns: 'repeat(2, 1fr)', margin: '10px 0 0', maxWidth: 'none' }}>
+                  <div className="result-stat"><div className="v" style={{ fontSize: 20 }}>{formatSec(analysis.totalMs / 1000)}</div><div className="l">Total time</div></div>
+                  <div className="result-stat"><div className="v" style={{ fontSize: 20 }}>{formatSec(analysis.avgMs / 1000)}</div><div className="l">Avg / question</div></div>
+                  <div className="result-stat"><div className="v" style={{ fontSize: 16 }}>{formatSec(analysis.slowest?.timeTakenMs / 1000 || 0)}</div><div className="l">Slowest question</div></div>
+                  <div className="result-stat"><div className="v" style={{ fontSize: 16 }}>{formatSec(analysis.fastest?.timeTakenMs / 1000 || 0)}</div><div className="l">Fastest question</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="result-breakdown">
         <div className="card" style={{ padding: '22px 26px' }}>
           <h3 style={{ marginBottom: 14, fontSize: 20 }}>Answer Review</h3>
-          {result.answers.map((a, i) => (
-            <div key={a.questionId} className="rq">
-              <div className="rq-text">{i + 1}. {a.question}</div>
-              <div className={a.isCorrect ? 'rq-correct' : 'rq-wrong'}>
-                {a.isCorrect ? '✔ Correct' : '✘ Wrong'}
-                <span style={{ color: 'var(--text-faint)' }}>
-                  {' '}· {a.pointsEarned >= 0 ? `+${a.pointsEarned}` : a.pointsEarned}/{a.points} pts
-                </span>
-              </div>
-              {!a.isCorrect && (
+          {result.answers.map((a, i) => {
+            const unanswered = a.selected === null || a.selected === undefined;
+            const status = a.isCorrect ? 'correct' : unanswered ? 'unanswered' : 'wrong';
+            return (
+              <div key={a.questionId} className="rq">
+                <div className="rq-text">
+                  {i + 1}. {a.question}
+                  {a.difficulty && <span style={{ marginLeft: 8 }}>{difficultyChip(a.difficulty)}</span>}
+                  {analysis && (
+                    <span className="badge badge-dim" style={{ marginLeft: 8 }}>⏱ {formatSec((a.timeTakenMs || 0) / 1000)}</span>
+                  )}
+                </div>
+                <div className={`rq-${status}`}>
+                  {a.isCorrect ? '✔ Correct' : unanswered ? '○ Unanswered' : '✘ Wrong'}
+                  <span style={{ color: 'var(--text-faint)' }}>
+                    {' '}· {a.pointsEarned >= 0 ? `+${a.pointsEarned}` : a.pointsEarned}/{a.points} pts
+                  </span>
+                </div>
                 <div className="rq-correct" style={{ fontSize: 13 }}>
                   Correct answer: {OPTION_KEYS[a.correctAnswer]}. {a.options[a.correctAnswer]}
-                  {a.selected !== null && a.selected !== undefined && (
-                    <span style={{ color: 'var(--text-dim)' }}>
+                  {!unanswered && (
+                    <span style={{ color: a.isCorrect ? 'var(--text-dim)' : 'var(--danger)' }}>
                       {' '}· Your answer: {OPTION_KEYS[a.selected]}. {a.options[a.selected]}
                     </span>
                   )}
                 </div>
-              )}
-              {a.explanation && (
-                <div style={{ color: 'var(--text-faint)', fontSize: 13, marginTop: 4 }}>💡 {a.explanation}</div>
-              )}
-            </div>
-          ))}
+                {a.explanation && (
+                  <div style={{ color: 'var(--text-faint)', fontSize: 13, marginTop: 4 }}>💡 {a.explanation}</div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

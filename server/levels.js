@@ -3,6 +3,7 @@ export const XP_RULES = {
   COMPLETION_BONUS: 5,
   FIRST_QUIZ_BONUS: 25,
   DAILY_BONUS: 15,
+  WEEKLY_BONUS: 30,
   RAPID_XP_PER_CORRECT: 20,
   MILESTONES: [
     { minScore: 100, xp: 50, label: '100% score' },

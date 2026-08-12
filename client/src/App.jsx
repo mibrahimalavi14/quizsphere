@@ -8,6 +8,12 @@ import QuizIntro from './pages/QuizIntro';
 import Quiz from './pages/Quiz';
 import DailyChallenge from './pages/DailyChallenge';
 import RapidFire from './pages/RapidFire';
+import Mistakes from './pages/Mistakes';
+import WeeklyChallenge from './pages/WeeklyChallenge';
+import TestCenter from './pages/TestCenter';
+import MockQuiz from './pages/MockQuiz';
+import RetakeQuiz from './pages/RetakeQuiz';
+import Certificate from './pages/Certificate';
 import Result from './pages/Result';
 import Leaderboard from './pages/Leaderboard';
 import Ranks from './pages/Ranks';
@@ -54,6 +60,54 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <RapidFire />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/quiz/mistakes"
+            element={
+              <ProtectedRoute>
+                <Mistakes />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/quiz/weekly"
+            element={
+              <ProtectedRoute>
+                <WeeklyChallenge />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tests"
+            element={
+              <ProtectedRoute>
+                <TestCenter />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/mock/:id"
+            element={
+              <ProtectedRoute>
+                <MockQuiz />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/retake/:attemptId"
+            element={
+              <ProtectedRoute>
+                <RetakeQuiz />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/certificate/:id"
+            element={
+              <ProtectedRoute>
+                <Certificate />
               </ProtectedRoute>
             }
           />

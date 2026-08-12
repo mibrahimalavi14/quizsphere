@@ -74,6 +74,10 @@ export default function Home() {
                   <span className="lbl">Your Level</span>
                 </div>
                 <div className="stat-chip">
+                  <span className="num" style={{ color: '#fbbf24' }}>{display.rankXp ?? display.xp ?? 0}</span>
+                  <span className="lbl">Leaderboard XP</span>
+                </div>
+                <div className="stat-chip">
                   <span className="num" style={{ color: '#f87171' }}>{display.currentStreak ?? 0}🔥</span>
                   <span className="lbl">Day Streak</span>
                 </div>

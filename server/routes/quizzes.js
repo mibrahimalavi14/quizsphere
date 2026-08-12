@@ -114,6 +114,117 @@ router.post('/rapid/submit', requireAuth, (req, res) => {
   }
 });
 
+router.get('/practice/mistakes', requireAuth, (req, res) => {
+  const practiceSubject = db.prepare(`SELECT * FROM subjects WHERE name = 'Practice Mistakes'`).get();
+  if (!practiceSubject) return res.status(500).json({ error: 'Practice not configured' });
+
+  const limit = Math.min(Number(req.query.limit) || 10, 30);
+  const rows = db.prepare(`
+    SELECT q.* FROM questions q
+    JOIN question_stats s ON s.question_id = q.id
+    WHERE s.user_id = ? AND s.times_wrong > 0
+    ORDER BY RANDOM() LIMIT ?
+  `).all(req.user.id, limit);
+
+  res.json({
+    subject: { id: practiceSubject.id, name: practiceSubject.name, icon: practiceSubject.icon, color: practiceSubject.color },
+    questions: rows.map((q) => stripAnswer(q, true)),
+  });
+});
+
+router.post('/practice/mistakes/submit', requireAuth, (req, res) => {
+  const practiceSubject = db.prepare(`SELECT id FROM subjects WHERE name = 'Practice Mistakes'`).get();
+  if (!practiceSubject) return res.status(500).json({ error: 'Practice not configured' });
+
+  const answers = Array.isArray(req.body?.answers) ? req.body.answers : [];
+  try {
+    const result = gradeAndRecord({ userId: req.user.id, subjectId: practiceSubject.id, answers, mode: 'practice', practiceType: 'mistakes', durationSeconds: req.body?.durationSeconds });
+    res.status(201).json(result);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+router.get('/weekly', requireAuth, (req, res) => {
+  const weeklySubject = db.prepare(`SELECT * FROM subjects WHERE name = 'Weekly Challenge'`).get();
+  if (!weeklySubject) return res.status(500).json({ error: 'Weekly challenge not configured' });
+  if (!gate(req, res, weeklySubject.min_rank)) return;
+
+  const doneThisWeek = db.prepare(`
+    SELECT a.* FROM attempts a WHERE a.user_id = ? AND a.mode = 'weekly'
+      AND strftime('%Y-%W', a.created_at) = strftime('%Y-%W', 'now')
+  `).get(req.user.id);
+
+  const weekStart = new Date();
+  weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+
+  const range = {
+    start: weekStart.toISOString().slice(0, 10),
+    end: weekEnd.toISOString().slice(0, 10),
+  };
+
+  if (doneThisWeek) {
+    return res.json({ done: true, range, subject: { id: weeklySubject.id, name: weeklySubject.name, icon: weeklySubject.icon, color: weeklySubject.color }, attempt: doneThisWeek });
+  }
+
+  const rows = db.prepare(`
+    SELECT * FROM questions WHERE subject_id IN (SELECT id FROM subjects WHERE is_visible = 1)
+    ORDER BY RANDOM() LIMIT 10
+  `).all();
+
+  res.json({
+    done: false,
+    range,
+    subject: { id: weeklySubject.id, name: weeklySubject.name, icon: weeklySubject.icon, color: weeklySubject.color },
+    questions: rows.map((q) => stripAnswer(q, false)),
+  });
+});
+
+router.post('/weekly/submit', requireAuth, (req, res) => {
+  const weeklySubject = db.prepare(`SELECT id, min_rank FROM subjects WHERE name = 'Weekly Challenge'`).get();
+  if (!weeklySubject) return res.status(500).json({ error: 'Weekly challenge not configured' });
+  if (!gate(req, res, weeklySubject.min_rank)) return;
+
+  const doneThisWeek = db.prepare(`
+    SELECT id FROM attempts WHERE user_id = ? AND mode = 'weekly'
+      AND strftime('%Y-%W', created_at) = strftime('%Y-%W', 'now')
+  `).get(req.user.id);
+  if (doneThisWeek) return res.status(409).json({ error: 'You already completed this week\'s challenge. Come back next week!' });
+
+  const answers = Array.isArray(req.body?.answers) ? req.body.answers : [];
+  try {
+    const result = gradeAndRecord({ userId: req.user.id, subjectId: weeklySubject.id, answers, mode: 'weekly', durationSeconds: req.body?.durationSeconds });
+    res.status(201).json(result);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+router.get('/retake/:attemptId/questions', requireAuth, (req, res) => {
+  const attempt = db.prepare(`
+    SELECT a.*, s.name AS subject_name, s.icon, s.color, s.min_rank FROM attempts a
+    JOIN subjects s ON s.id = a.subject_id
+    WHERE a.id = ? AND a.user_id = ? AND a.mode NOT IN ('practice', 'daily', 'weekly')
+  `).get(req.params.attemptId, req.user.id);
+  if (!attempt) return res.status(404).json({ error: 'Attempt not found' });
+
+  const rows = db.prepare(`
+    SELECT q.* FROM questions q
+    JOIN answers a ON a.question_id = q.id
+    WHERE a.attempt_id = ?
+    ORDER BY a.id ASC
+  `).all(attempt.id);
+
+  res.json({
+    subject: { id: attempt.subject_id, name: attempt.subject_name, icon: attempt.icon, color: attempt.color, min_rank: attempt.min_rank },
+    mode: attempt.mode,
+    retakeOf: attempt.id,
+    questions: rows.map((q) => stripAnswer(q, false)),
+  });
+});
+
 router.get('/:subjectId/questions', requireAuth, (req, res) => {
   const subjectId = Number(req.params.subjectId);
   const limit = Math.min(Number(req.query.limit) || 10, 50);
@@ -153,12 +264,15 @@ router.post('/:subjectId/submit', requireAuth, (req, res) => {
   const answers = Array.isArray(req.body?.answers) ? req.body.answers : [];
   const mode = req.body?.mode || 'quiz';
   const negative = Boolean(req.body?.negative);
+  const examMode = Boolean(req.body?.examMode);
+  const retakeOf = Number(req.body?.retakeOf) || null;
+  const config = req.body?.config ? JSON.stringify(req.body.config) : '';
 
-  const allowedModes = ['quiz', 'practice'];
+  const allowedModes = ['quiz', 'practice', 'mock'];
   if (!allowedModes.includes(mode)) return res.status(400).json({ error: 'Invalid mode' });
 
   try {
-    const result = gradeAndRecord({ userId: req.user.id, subjectId, answers, mode, negative, durationSeconds: req.body?.durationSeconds });
+    const result = gradeAndRecord({ userId: req.user.id, subjectId, answers, mode, negative, durationSeconds: req.body?.durationSeconds, examMode, retakeOf, config });
     res.status(201).json(result);
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });

@@ -26,6 +26,7 @@ router.patch('/profile', requireAuth, (req, res) => {
     avatar: user.avatar,
     bio: user.bio,
     xp: user.xp,
+    rankXp: user.rank_xp,
     ...levelInfo(user.xp),
     ...rankInfoForXp(user.xp),
   });
@@ -65,6 +66,7 @@ router.get('/stats', requireAuth, (req, res) => {
       avatar: user.avatar,
       bio: user.bio,
       xp: user.xp,
+      rankXp: user.rank_xp,
       ...levelInfo(user.xp),
       ...rankInfoForXp(user.xp),
       currentStreak: user.current_streak,
@@ -136,7 +138,7 @@ router.get('/dashboard', requireAuth, (req, res) => {
     ORDER BY a.id DESC LIMIT 50
   `).all(uid);
 
-  const rankRow = db.prepare('SELECT COUNT(*) + 1 AS rank FROM users WHERE is_admin = 0 AND xp > ?').get(user.xp || 0);
+  const rankRow = db.prepare('SELECT COUNT(*) + 1 AS rank FROM users WHERE is_admin = 0 AND rank_xp > ?').get(user.rank_xp || 0);
   const myWeekXp = db.prepare(`SELECT COALESCE(SUM(xp_earned),0) AS px FROM attempts WHERE user_id = ? AND mode != 'practice' AND total_questions >= 2 AND created_at >= datetime('now', '-7 days')`).get(uid).px || 0;
   const myMonthXp = db.prepare(`SELECT COALESCE(SUM(xp_earned),0) AS px FROM attempts WHERE user_id = ? AND mode != 'practice' AND total_questions >= 2 AND created_at >= datetime('now', '-30 days')`).get(uid).px || 0;
   const weekRow = db.prepare(`
@@ -215,6 +217,7 @@ router.get('/dashboard', requireAuth, (req, res) => {
       avatar: user.avatar,
       bio: user.bio,
       xp: user.xp,
+      rankXp: user.rank_xp,
       ...levelInfo(user.xp),
       ...rankInfoForXp(user.xp),
       currentStreak: user.current_streak,
@@ -274,8 +277,8 @@ router.get('/attempts/:id', requireAuth, (req, res) => {
   if (!attempt) return res.status(404).json({ error: 'Attempt not found' });
 
   const answers = db.prepare(`
-    SELECT ans.question_id, ans.selected, ans.is_correct, ans.points_earned,
-      q.question, q.correct AS correct_answer,
+    SELECT ans.question_id, ans.selected, ans.is_correct, ans.points_earned, ans.time_taken_ms,
+      q.question, q.correct AS correct_answer, q.difficulty,
       q.option_a, q.option_b, q.option_c, q.option_d, q.points, q.explanation
     FROM answers ans JOIN questions q ON q.id = ans.question_id
     WHERE ans.attempt_id = ?
@@ -292,8 +295,66 @@ router.get('/attempts/:id', requireAuth, (req, res) => {
       isCorrect: a.is_correct,
       pointsEarned: a.points_earned,
       points: a.points,
+      difficulty: a.difficulty,
+      timeTakenMs: a.time_taken_ms || 0,
       explanation: a.explanation || '',
     })),
+  });
+});
+
+router.get('/certificates', requireAuth, (req, res) => {
+  const certs = db.prepare(`
+    SELECT c.*, s.name AS subject_name, s.icon AS subject_icon
+    FROM certificates c JOIN subjects s ON s.id = c.subject_id
+    WHERE c.user_id = ?
+    ORDER BY c.id DESC
+  `).all(req.user.id);
+  res.json(certs);
+});
+
+router.get('/certificates/:id', requireAuth, (req, res) => {
+  const cert = db.prepare(`
+    SELECT c.*, s.name AS subject_name, s.icon AS subject_icon, s.color AS subject_color,
+      u.name AS user_name, a.score AS attempt_score, a.correct_answers, a.total_questions
+    FROM certificates c
+    JOIN subjects s ON s.id = c.subject_id
+    JOIN users u ON u.id = c.user_id
+    JOIN attempts a ON a.id = c.attempt_id
+    WHERE c.id = ? AND c.user_id = ?
+  `).get(req.params.id, req.user.id);
+  if (!cert) return res.status(404).json({ error: 'Certificate not found' });
+  res.json(cert);
+});
+
+router.get('/mistakes', requireAuth, (req, res) => {
+  const uid = req.user.id;
+
+  const totals = db.prepare(`
+    SELECT
+      COUNT(*) AS mistakes,
+      COALESCE(SUM(CASE WHEN mastered = 1 THEN 1 END), 0) AS mastered
+    FROM question_stats WHERE user_id = ? AND times_wrong > 0
+  `).get(uid);
+
+  const bySubject = db.prepare(`
+    SELECT s.id, s.name, s.icon, s.color,
+      COUNT(*) AS mistakes,
+      COALESCE(SUM(CASE WHEN st.mastered = 1 THEN 1 END), 0) AS mastered
+    FROM question_stats st
+    JOIN questions q ON q.id = st.question_id
+    JOIN subjects s ON s.id = q.subject_id
+    WHERE st.user_id = ? AND st.times_wrong > 0
+    GROUP BY s.id
+    ORDER BY mistakes DESC, s.name ASC
+  `).all(uid);
+
+  const mistakes = totals.mistakes || 0;
+  const mastered = totals.mastered || 0;
+  res.json({
+    mistakes,
+    mastered,
+    remaining: Math.max(mistakes - mastered, 0),
+    bySubject,
   });
 });
 

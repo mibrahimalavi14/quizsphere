@@ -45,7 +45,7 @@ export function getUserStats(userId) {
     ) sub
   `).get(userId);
 
-  const rankRow = db.prepare('SELECT COUNT(*) + 1 AS rank FROM users WHERE xp > ?').get(user?.xp || 0);
+  const rankRow = db.prepare('SELECT COUNT(*) + 1 AS rank FROM users WHERE rank_xp > ?').get(user?.rank_xp || 0);
 
   const subjectTotal = db.prepare('SELECT COUNT(*) AS c FROM subjects').get().c;
   const level = levelForXp(user?.xp || 0);

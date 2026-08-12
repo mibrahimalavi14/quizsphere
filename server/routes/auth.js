@@ -17,6 +17,7 @@ function publicUser(u) {
     avatar: u.avatar || '',
     bio: u.bio || '',
     xp: u.xp || 0,
+    rankXp: u.rank_xp || 0,
     ...levelInfo(u.xp || 0),
     ...rankInfoForXp(u.xp || 0),
   };

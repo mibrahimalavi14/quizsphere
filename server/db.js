@@ -77,6 +77,7 @@ db.exec(`
     password TEXT NOT NULL,
     is_admin INTEGER NOT NULL DEFAULT 0,
     xp INTEGER NOT NULL DEFAULT 0,
+    rank_xp INTEGER NOT NULL DEFAULT 0,
     bio TEXT NOT NULL DEFAULT '',
     avatar TEXT NOT NULL DEFAULT '',
     current_streak INTEGER NOT NULL DEFAULT 0,
@@ -124,7 +125,10 @@ db.exec(`
     earned_points INTEGER NOT NULL DEFAULT 0,
     total_points INTEGER NOT NULL DEFAULT 0,
     xp_earned INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    exam_mode INTEGER NOT NULL DEFAULT 0,
+    retake_of INTEGER,
+    config TEXT NOT NULL DEFAULT ''
   );
 
   CREATE TABLE IF NOT EXISTS answers (
@@ -133,7 +137,8 @@ db.exec(`
     question_id INTEGER NOT NULL,
     selected INTEGER,
     is_correct INTEGER NOT NULL DEFAULT 0,
-    points_earned INTEGER NOT NULL DEFAULT 0
+    points_earned INTEGER NOT NULL DEFAULT 0,
+    time_taken_ms INTEGER NOT NULL DEFAULT 0
   );
 
   CREATE TABLE IF NOT EXISTS badges (
@@ -161,12 +166,37 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS question_stats (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    question_id INTEGER NOT NULL,
+    times_attempted INTEGER NOT NULL DEFAULT 0,
+    times_correct INTEGER NOT NULL DEFAULT 0,
+    times_wrong INTEGER NOT NULL DEFAULT 0,
+    mastered INTEGER NOT NULL DEFAULT 0,
+    mistake_xp INTEGER NOT NULL DEFAULT 0,
+    last_attempted TEXT,
+    UNIQUE(user_id, question_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS certificates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+    attempt_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    score INTEGER NOT NULL DEFAULT 0,
+    cert_code TEXT NOT NULL UNIQUE,
+    issued_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE INDEX IF NOT EXISTS idx_questions_subject ON questions(subject_id);
   CREATE INDEX IF NOT EXISTS idx_attempts_user ON attempts(user_id);
   CREATE INDEX IF NOT EXISTS idx_attempts_subject ON attempts(subject_id);
   CREATE INDEX IF NOT EXISTS idx_attempts_mode ON attempts(mode);
   CREATE INDEX IF NOT EXISTS idx_badges_user ON badges(user_id);
   CREATE INDEX IF NOT EXISTS idx_announcements_active ON announcements(is_active);
+  CREATE INDEX IF NOT EXISTS idx_qstats_user ON question_stats(user_id);
 `);
 
 const columnExists = (table, column) => {
@@ -176,6 +206,11 @@ const columnExists = (table, column) => {
 
 const migrate = () => {
   if (!columnExists('users', 'xp')) db.exec(`ALTER TABLE users ADD COLUMN xp INTEGER NOT NULL DEFAULT 0`);
+  if (!columnExists('users', 'rank_xp')) {
+    db.exec(`ALTER TABLE users ADD COLUMN rank_xp INTEGER NOT NULL DEFAULT 0`);
+    // Historically all XP came from graded quizzes, so rank_xp = total xp.
+    db.exec(`UPDATE users SET rank_xp = xp`);
+  }
   if (!columnExists('users', 'bio')) db.exec(`ALTER TABLE users ADD COLUMN bio TEXT NOT NULL DEFAULT ''`);
   if (!columnExists('users', 'avatar')) db.exec(`ALTER TABLE users ADD COLUMN avatar TEXT NOT NULL DEFAULT ''`);
   if (!columnExists('users', 'current_streak')) db.exec(`ALTER TABLE users ADD COLUMN current_streak INTEGER NOT NULL DEFAULT 0`);
@@ -205,6 +240,11 @@ const migrate = () => {
   if (!columnExists('attempts', 'negative')) db.exec(`ALTER TABLE attempts ADD COLUMN negative INTEGER NOT NULL DEFAULT 0`);
   if (!columnExists('attempts', 'xp_earned')) db.exec(`ALTER TABLE attempts ADD COLUMN xp_earned INTEGER NOT NULL DEFAULT 0`);
   if (!columnExists('attempts', 'duration_seconds')) db.exec(`ALTER TABLE attempts ADD COLUMN duration_seconds INTEGER NOT NULL DEFAULT 0`);
+  if (!columnExists('attempts', 'exam_mode')) db.exec(`ALTER TABLE attempts ADD COLUMN exam_mode INTEGER NOT NULL DEFAULT 0`);
+  if (!columnExists('attempts', 'retake_of')) db.exec(`ALTER TABLE attempts ADD COLUMN retake_of INTEGER`);
+  if (!columnExists('attempts', 'config')) db.exec(`ALTER TABLE attempts ADD COLUMN config TEXT NOT NULL DEFAULT ''`);
+
+  if (!columnExists('answers', 'time_taken_ms')) db.exec(`ALTER TABLE answers ADD COLUMN time_taken_ms INTEGER NOT NULL DEFAULT 0`);
 };
 
 migrate();

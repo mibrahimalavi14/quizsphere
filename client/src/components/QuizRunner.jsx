@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 
 const OPTION_KEYS = ['A', 'B', 'C', 'D'];
 
-export default function QuizRunner({ subject, questions, mode = 'quiz', negative = false, submitUrl }) {
+export default function QuizRunner({ subject, questions, mode = 'quiz', negative = false, submitUrl, examMode = false, totalTime = 0, extraPayload = {} }) {
   const navigate = useNavigate();
   const { push } = useToast();
   const { refreshUser } = useAuth();
@@ -17,21 +17,24 @@ export default function QuizRunner({ subject, questions, mode = 'quiz', negative
   const [answers, setAnswers] = useState({});
   const [reviewed, setReviewed] = useState({});
   const [revealed, setRevealed] = useState({});
-  const [remaining, setRemaining] = useState(0);
+  const [remaining, setRemaining] = useState(totalTime > 0 ? totalTime : (questions[0]?.timeLimit || 20));
   const [submitting, setSubmitting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const submittedRef = useRef(false);
   const answersRef = useRef(answers);
   answersRef.current = answers;
+  const timesRef = useRef({});
+  const questionStartRef = useRef(Date.now());
   const startTimeRef = useRef(Date.now());
 
   useEffect(() => {
     if (questions.length) {
-      setRemaining(questions[0].timeLimit);
+      setRemaining(totalTime > 0 ? totalTime : questions[0].timeLimit);
       startTimeRef.current = Date.now();
+      questionStartRef.current = Date.now();
     }
-  }, [questions]);
+  }, [questions, totalTime]);
 
   const currentQuestion = questions[current];
   const answeredCount = Object.keys(answers).filter((qid) => answers[qid] !== null && answers[qid] !== undefined).length;
@@ -42,13 +45,17 @@ export default function QuizRunner({ subject, questions, mode = 'quiz', negative
     if (submittedRef.current) return;
     submittedRef.current = true;
     setSubmitting(true);
+    if (currentQuestion) {
+      timesRef.current[currentQuestion.id] = Math.max(0, Date.now() - questionStartRef.current);
+    }
     try {
       const durationSeconds = Math.round((Date.now() - startTimeRef.current) / 1000);
       const payload = questions.map((q) => ({
         questionId: q.id,
         selected: answersRef.current[q.id] === undefined ? null : answersRef.current[q.id],
+        timeTakenMs: timesRef.current[q.id] || 0,
       }));
-      const result = await api.post(submitUrl, { answers: payload, mode, negative, durationSeconds });
+      const result = await api.post(submitUrl, { answers: payload, mode, negative, durationSeconds, examMode, ...extraPayload });
       refreshUser().catch(() => {});
       navigate(`/result/${result.attemptId}`, { state: { result } });
     } catch (e) {
@@ -59,33 +66,59 @@ export default function QuizRunner({ subject, questions, mode = 'quiz', negative
     }
   };
 
+  const recordCurrentTime = () => {
+    if (currentQuestion) {
+      timesRef.current[currentQuestion.id] = Math.max(0, Date.now() - questionStartRef.current);
+    }
+  };
+
   const goNext = () => {
+    recordCurrentTime();
     if (current >= questions.length - 1) {
       setShowConfirm(true);
     } else {
       const next = current + 1;
       setCurrent(next);
       setRemaining(questions[next].timeLimit);
+      questionStartRef.current = Date.now();
       setRevealed((r) => ({ ...r, [currentQuestion.id]: r[currentQuestion.id] ?? false }));
     }
   };
 
   const goPrev = () => {
-    if (current <= 0) return;
+    if (current <= 0 || examMode) return;
+    recordCurrentTime();
     const prev = current - 1;
     setCurrent(prev);
     setRemaining(questions[prev].timeLimit);
+    questionStartRef.current = Date.now();
   };
 
   const jumpTo = (idx) => {
-    if (idx === current) return;
+    if (idx === current || examMode) return;
+    recordCurrentTime();
     setCurrent(idx);
     setRemaining(questions[idx].timeLimit);
+    questionStartRef.current = Date.now();
     setNavOpen(false);
   };
 
   useEffect(() => {
     if (!currentQuestion || practice || submitting) return;
+    questionStartRef.current = Date.now();
+    if (totalTime > 0) {
+      const t = setInterval(() => {
+        setRemaining((r) => {
+          if (r <= 1) {
+            clearInterval(t);
+            submitQuiz();
+            return 0;
+          }
+          return r - 1;
+        });
+      }, 1000);
+      return () => clearInterval(t);
+    }
     const t = setInterval(() => {
       setRemaining((r) => {
         if (r <= 1) {
@@ -103,7 +136,7 @@ export default function QuizRunner({ subject, questions, mode = 'quiz', negative
     }, 1000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current, currentQuestion, practice, submitting]);
+  }, [current, currentQuestion, practice, submitting, totalTime]);
 
   const selectOption = (idx) => {
     if (submitting) return;
@@ -123,8 +156,8 @@ export default function QuizRunner({ subject, questions, mode = 'quiz', negative
 
   const timeBar = useMemo(() => {
     if (!currentQuestion || practice) return 100;
-    return Math.max((remaining / currentQuestion.timeLimit) * 100, 0);
-  }, [remaining, currentQuestion, practice]);
+    return Math.max((remaining / (totalTime > 0 ? totalTime : currentQuestion.timeLimit)) * 100, 0);
+  }, [remaining, currentQuestion, practice, totalTime]);
 
   const timerClass = remaining <= 5 ? 'timer danger' : remaining <= 10 ? 'timer warn' : 'timer';
 
@@ -154,6 +187,8 @@ export default function QuizRunner({ subject, questions, mode = 'quiz', negative
     practice: <span className="mode-badge mode-practice">Practice</span>,
     daily: <span className="mode-badge mode-daily">Daily Challenge</span>,
     rapid: <span className="mode-badge mode-rapid">Rapid Fire</span>,
+    weekly: <span className="mode-badge mode-weekly">Weekly Challenge</span>,
+    mock: <span className="mode-badge mode-mock">Mock Test</span>,
   }[mode];
 
   const difficultyChip = (d) => (
@@ -165,6 +200,7 @@ export default function QuizRunner({ subject, questions, mode = 'quiz', negative
   return (
     <div className="container">
       <div className="quiz-layout">
+        {!examMode && (
         <div className="quiz-sidebar">
           <div className="qnav-card">
             <div className="qnav-head">
@@ -185,6 +221,7 @@ export default function QuizRunner({ subject, questions, mode = 'quiz', negative
             </div>
           </div>
         </div>
+        )}
 
         <div className="quiz-main">
           <div className="quiz-topbar">
@@ -194,6 +231,7 @@ export default function QuizRunner({ subject, questions, mode = 'quiz', negative
                 <div style={{ fontWeight: 700 }}>{subject.name}</div>
                 <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>
                   Question {current + 1} of {questions.length} · {modeBadge}
+                  {examMode && <span className="badge badge-danger" style={{ marginLeft: 8 }}>Exam Mode</span>}
                 </div>
               </div>
             </div>
@@ -236,12 +274,12 @@ export default function QuizRunner({ subject, questions, mode = 'quiz', negative
               </div>
             )}
             <div className="quiz-actions">
-              {!practice && (
+              {!practice && !examMode && (
                 <button className="btn btn-outline" disabled={submitting} onClick={toggleReview}>
                   {reviewed[currentQuestion.id] ? '✓ Marked' : '📌 Review'}
                 </button>
               )}
-              <button className="btn btn-ghost" disabled={current === 0 || submitting} onClick={goPrev}>
+              <button className="btn btn-ghost" disabled={current === 0 || submitting || examMode} onClick={goPrev}>
                 ← Prev
               </button>
               {current >= questions.length - 1 ? (
@@ -254,13 +292,13 @@ export default function QuizRunner({ subject, questions, mode = 'quiz', negative
                 </button>
               )}
             </div>
-            {!practice && (
+            {!practice && !examMode && (
               <button className="btn btn-ghost btn-sm nav-toggle" onClick={() => setNavOpen(!navOpen)}>
                 {navOpen ? 'Hide question list ▲' : 'Show question list ▼'}
               </button>
             )}
           </div>
-          {navOpen && (
+          {navOpen && !examMode && (
             <div className="qnav-card qnav-mobile">
               <div className="qnav-grid">
                 {questions.map((q, i) => (

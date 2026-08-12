@@ -38,6 +38,7 @@ export default function Profile() {
   const { push } = useToast();
   const [data, setData] = useState(null);
   const [badges, setBadges] = useState(null);
+  const [mistakes, setMistakes] = useState(null);
   const [editOpen, setEditOpen] = useState(false);
   const [form, setForm] = useState({ name: '', bio: '', avatar: '' });
   const [saving, setSaving] = useState(false);
@@ -46,6 +47,7 @@ export default function Profile() {
   useEffect(() => {
     api.get('/user/dashboard').then(setData).catch(() => setData(null));
     api.get('/user/badges').then(setBadges).catch(() => setBadges(null));
+    api.get('/user/mistakes').then(setMistakes).catch(() => setMistakes(null));
   }, []);
 
   if (!data) return <Loading />;
@@ -123,6 +125,7 @@ export default function Profile() {
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
                 <span className="rank-badge" style={{ color: user.rankColor, borderColor: user.rankColor }}>{user.rankIcon} {user.rankName}</span>
                 <span className="level-badge">Level {user.level}</span>
+                <span className="badge badge-primary">🏆 {user.rankXp ?? user.xp} leaderboard XP</span>
                 <span className="badge badge-warning">🔥 {user.currentStreak} day streak</span>
                 <span className="badge badge-dim">Best streak: {user.maxStreak}</span>
               </div>
@@ -313,6 +316,51 @@ export default function Profile() {
 
                 <div style={{ marginTop: 30 }}>
                   <div className="section-head" style={{ marginBottom: 16 }}>
+                    <h3 style={{ fontSize: 20 }}>🧠 Practice Mistakes</h3>
+                    <span className="badge badge-primary">Auto-tracked</span>
+                  </div>
+                  {mistakes === null ? (
+                    <Loading />
+                  ) : mistakes.mistakes === 0 ? (
+                    <div className="empty-state">
+                      <div className="icon">🌟</div>
+                      <h3>Zero mistakes!</h3>
+                      <p style={{ color: 'var(--text-dim)' }}>Every question you get wrong is added here for practice. Keep it up!</p>
+                    </div>
+                  ) : (
+                    <div className="mistake-card">
+                      <div className="mistake-grid">
+                        <div className="mistake-stat">
+                          <div className="v">{mistakes.mistakes}</div>
+                          <div className="l">Mistakes</div>
+                        </div>
+                        <div className="mistake-stat">
+                          <div className="v" style={{ color: 'var(--success)' }}>{mistakes.mastered}</div>
+                          <div className="l">Mastered</div>
+                        </div>
+                        <div className="mistake-stat">
+                          <div className="v" style={{ color: 'var(--warning)' }}>{mistakes.remaining}</div>
+                          <div className="l">To Practice</div>
+                        </div>
+                      </div>
+                      <div className="mistake-progress">
+                        <div
+                          className="mistake-progress-fill"
+                          style={{ width: `${mistakes.mistakes ? Math.min(100, Math.round((mistakes.mastered / mistakes.mistakes) * 100)) : 0}%` }}
+                        ></div>
+                      </div>
+                      <div className="mistake-cta">
+                        <p style={{ color: 'var(--text-dim)', fontSize: 13.5 }}>
+                          Revisit the questions you got wrong and turn them green. Each mastery is 1 step closer to clearing your mistakes.
+                        </p>
+                        <Link to="/quiz/mistakes" className="btn btn-primary">Practice Now →</Link>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ marginTop: 30 }}>
+                  <div className="section-head" style={{ marginBottom: 16 }}>
                     <h3 style={{ fontSize: 20 }}>🕒 Recent Attempts</h3>
                     <Link to="/profile" className="btn btn-ghost btn-sm" onClick={() => setTab('history')}>View all →</Link>
                   </div>
@@ -389,6 +437,55 @@ export default function Profile() {
                   </>
                 )}
               </div>
+            </div>
+
+            <div className="panel" style={{ marginTop: 26 }}>
+              <h3 className="panel-title">🧠 Mistake Analytics</h3>
+              {mistakes === null ? (
+                <Loading />
+              ) : mistakes.mistakes === 0 ? (
+                <p style={{ color: 'var(--text-faint)', fontSize: 14 }}>No mistakes recorded yet — keep it up!</p>
+              ) : (
+                <>
+                  <div className="mistake-grid">
+                    <div className="mistake-stat">
+                      <div className="v">{mistakes.mistakes}</div>
+                      <div className="l">Mistakes</div>
+                    </div>
+                    <div className="mistake-stat">
+                      <div className="v" style={{ color: 'var(--success)' }}>{mistakes.mastered}</div>
+                      <div className="l">Mastered</div>
+                    </div>
+                    <div className="mistake-stat">
+                      <div className="v" style={{ color: 'var(--warning)' }}>{mistakes.remaining}</div>
+                      <div className="l">Remaining</div>
+                    </div>
+                  </div>
+                  <div className="mistake-progress" style={{ marginBottom: 20 }}>
+                    <div
+                      className="mistake-progress-fill"
+                      style={{ width: `${Math.min(100, Math.round((mistakes.mastered / mistakes.mistakes) * 100))}%` }}
+                    ></div>
+                  </div>
+                  <div className="subj-bars">
+                    {mistakes.bySubject.map((s) => (
+                      <div key={s.id} className="subj-bar-row" title={`${s.mistakes} mistake(s), ${s.mastered} mastered`}>
+                        <div className="subj-bar-name" style={{ ['--subject-color']: s.color }}>
+                          <span>{s.icon}</span>
+                          <span>{s.name}</span>
+                        </div>
+                        <div className="subj-bar-track">
+                          <div className="subj-bar-fill" style={{ width: `${Math.min(100, (s.mastered / s.mistakes) * 100)}%`, background: s.color }}></div>
+                        </div>
+                        <div className="subj-bar-meta">
+                          <b>{s.mistakes}</b> <span className="subj-bar-sub">mastered {s.mastered}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <Link to="/quiz/mistakes" className="btn btn-primary" style={{ marginTop: 16 }}>Practice Mistakes →</Link>
+                </>
+              )}
             </div>
 
             <div className="panel" style={{ marginTop: 26 }}>

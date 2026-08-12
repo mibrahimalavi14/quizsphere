@@ -15,4 +15,18 @@ export function ensureSpecialSubjects() {
   } else {
     db.prepare(`UPDATE subjects SET min_rank = 'silver', is_visible = 0 WHERE name = 'Rapid Fire'`).run();
   }
+  const practice = db.prepare(`SELECT id FROM subjects WHERE name = 'Practice Mistakes'`).get();
+  if (!practice) {
+    db.prepare('INSERT INTO subjects (name, description, icon, color, is_visible, min_rank) VALUES (?, ?, ?, ?, 0, ?)')
+      .run('Practice Mistakes', 'Revisit the questions you got wrong and master them.', '🧠', '#a855f7', 'bronze');
+  } else {
+    db.prepare(`UPDATE subjects SET min_rank = 'bronze', is_visible = 0 WHERE name = 'Practice Mistakes'`).run();
+  }
+  const weekly = db.prepare(`SELECT id FROM subjects WHERE name = 'Weekly Challenge'`).get();
+  if (!weekly) {
+    db.prepare('INSERT INTO subjects (name, description, icon, color, is_visible, min_rank) VALUES (?, ?, ?, ?, 0, ?)')
+      .run('Weekly Challenge', 'A bigger 10-question challenge every week. Bigger stakes, bigger XP.', '🏆', '#f59e0b', 'silver');
+  } else {
+    db.prepare(`UPDATE subjects SET min_rank = 'silver', is_visible = 0 WHERE name = 'Weekly Challenge'`).run();
+  }
 }
